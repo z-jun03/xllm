@@ -1,0 +1,108 @@
+#include "vlm_worker_impl.h"
+
+#include <c10/core/Device.h>
+#include <c10/core/DeviceGuard.h>
+#include <folly/Unit.h>
+#include <folly/futures/Future.h>
+#include <glog/logging.h>
+#include <torch/torch.h>
+#include <torch_npu/csrc/core/npu/NPUFormat.h>
+#include <torch_npu/csrc/core/npu/NPUFunctions.h>
+#include <torch_npu/csrc/framework/OpCommand.h>
+#include <torch_npu/torch_npu.h>
+
+#include <memory>
+#include <optional>
+#include <utility>
+
+#include "common/metrics.h"
+#include "framework/kv_cache/kv_cache.h"
+#include "framework/model/model_input_params.h"
+#include "framework/parallel_state.h"
+#include "framework/state_dict/state_dict.h"
+#include "models/model_registry.h"
+#include "pytorch/adapter/utils/utils.h"
+#include "util/threadpool.h"
+#include "util/timer.h"
+
+namespace xllm {
+
+VLMWorkerImpl::VLMWorkerImpl(const ParallelArgs& parallel_args,
+                             const torch::Device& device,
+                             const runtime::Options& options)
+    : WorkerImpl(parallel_args, device, options) {}
+
+bool VLMWorkerImpl::init_model(torch::ScalarType dtype,
+                               const ModelArgs& model_args,
+                               const QuantArgs& quant_args) {
+  CHECK(model_ == nullptr) << "Model is already initialized.";
+
+  int currentDevId = device_.index();
+  int ret = aclrtSetDevice(currentDevId);
+  if (ret != 0) {
+    LOG(ERROR) << "ACL set device id:" << currentDevId
+               << " failed, ret:" << ret;
+  }
+
+  // initialize model
+  ModelArgs tmp_model_args = model_args;
+  tmp_model_args.image_embedding_mode() = false;
+  context_.set_model_args(tmp_model_args);
+
+  context_.set_quant_args(quant_args);
+
+  dtype_ = dtype;
+  context_.set_tensor_options(torch::dtype(dtype_).device(device_));
+
+  model_ = create_vlm_model(context_);
+  CHECK(model_ != nullptr) << "Failed to create model.";
+  model_executor_ = std::make_unique<Executor>(
+      model_.get(), tmp_model_args, device_, options_);
+  return true;
+}
+
+std::optional<ForwardOutput> VLMWorkerImpl::step(const ForwardInput& inputs) {
+  c10_npu::SetDevice(device_.index());
+
+  Timer timer;
+  // all tensors should be on the same device as model
+  auto flatten_tokens = inputs.token_ids.to(device_);
+  auto flatten_positions = inputs.positions.to(device_);
+  auto params = inputs.input_params.to(device_);
+  auto sampling_params = inputs.sampling_params.to(device_, dtype_);
+
+  // call model executor forward to get hidden states
+  auto hidden_states = model_executor_->forward(
+      flatten_tokens, flatten_positions, kv_caches_, params);
+
+  torch::Tensor logits;
+  if (sampling_params.selected_token_idxes.defined()) {
+    logits =
+        model_->logits(hidden_states, sampling_params.selected_token_idxes);
+  }
+
+  torch::npu::synchronize();
+  COUNTER_ADD(execution_latency_seconds_model, timer.elapsed_seconds());
+
+  if (!driver_) {
+    return std::nullopt;
+  }
+
+  ForwardOutput output;
+  if (sampling_params.selected_token_idxes.defined()) {
+    auto sample_output = sampler_->forward(logits, sampling_params);
+    output.logits = logits;
+    COUNTER_ADD(execution_latency_seconds_sampling, timer.elapsed_seconds());
+
+    // set sample output to output
+    output.sample_output = sample_output;
+
+    // carry over the sampling params
+    output.do_sample = sampling_params.do_sample;
+    output.logprobs = sampling_params.logprobs;
+    output.max_top_logprobs = sampling_params.max_top_logprobs;
+  }
+  return output;
+}
+
+}  // namespace xllm

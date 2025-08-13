@@ -1,0 +1,140 @@
+#pragma once
+
+#include <torch/torch.h>
+
+#include <nlohmann/json.hpp>
+#include <optional>
+
+#include "common/types.h"
+#include "framework/model/model_input_params.h"
+#include "framework/sampling/sampling_params.h"
+
+namespace xllm {
+
+class WorkerType {
+ public:
+  enum Value : int8_t {
+    INVALID = 0,
+    LLM,   // LLM
+    VLM,   // VLM
+    ELM,   // Embedding LM
+    EVLM,  // Embedding VLM
+  };
+
+  constexpr WorkerType(Value v) : value_(v) {}
+  WorkerType(const std::string& str) {
+    if (str == "LLM") {
+      value_ = LLM;
+    } else if (str == "VLM") {
+      value_ = VLM;
+    } else if (str == "ELM") {
+      value_ = ELM;
+    } else if (str == "EVLM") {
+      value_ = EVLM;
+    } else {
+      value_ = INVALID;
+    }
+  }
+
+  WorkerType() = delete;
+
+  constexpr operator Value() const { return value_; }
+  explicit operator bool() = delete;
+
+  bool operator==(WorkerType rhs) const { return value_ == rhs.value_; }
+  bool operator!=(WorkerType rhs) const { return value_ != rhs.value_; }
+  bool operator==(Value rhs) const { return value_ == rhs; }
+  bool operator!=(Value rhs) const { return value_ != rhs; }
+
+  constexpr const char* to_string() const {
+    if (this->value_ == LLM) {
+      return "LLM";
+    } else if (this->value_ == VLM) {
+      return "VLM";
+    } else if (this->value_ == ELM) {
+      return "ELM";
+    } else if (this->value_ == EVLM) {
+      return "EVLM";
+    } else {
+      return "INVALID";
+    }
+  }
+
+ private:
+  Value value_;
+};
+
+// Inputs for forward execution
+struct ForwardInput {
+  ForwardInput to(const torch::Device& device, torch::ScalarType dtype) const {
+    ForwardInput inputs;
+    inputs.token_ids = safe_to(token_ids, device, true);
+    inputs.positions = safe_to(positions, device, true);
+    inputs.input_params = input_params.to(device);
+    inputs.sampling_params = sampling_params.to(device, dtype);
+    inputs.transfer_kv_infos = transfer_kv_infos;
+    return inputs;
+  }
+  // flatten token ids
+  torch::Tensor token_ids;
+  // flatten positions
+  torch::Tensor positions;
+  ModelInputParams input_params;
+  SamplingParameters sampling_params;
+  // kv info for disaggregated prefill/decode
+  std::vector<TransferKVInfo> transfer_kv_infos;
+};
+
+// output after forward execution
+struct ForwardOutput {
+  // sample parameters for speculative decoding
+  torch::Tensor do_sample;
+  // whether to return logprobs
+  bool logprobs = false;
+  // max number of top logprobs in the batch
+  int64_t max_top_logprobs = 0;
+  SampleOutput sample_output;
+  torch::Tensor logits;
+  torch::Tensor embedding;
+};
+
+// Model input with raw data, which will be
+// serielize to pb type before pass to remote worker.
+struct RawForwardInput {
+  std::vector<int32_t> flatten_tokens_vec;
+  std::vector<int32_t> flatten_positions_vec;
+  std::vector<const RequestSamplingParam*> sampling_params;
+  std::vector<int32_t> selected_token_idxes;
+  std::vector<int32_t> sample_idxes;
+  std::vector<std::vector<int64_t>> unique_token_ids_vec;
+  std::vector<std::vector<int32_t>> unique_token_counts_vec;
+  std::vector<int32_t> unique_token_lens_vec;
+  bool empty_kv_cache = true;
+  bool global_empty_kv_cache = true;
+  uint32_t max_seq_len;
+  uint32_t q_max_seq_len;
+  std::vector<int32_t> seq_lens;
+  std::vector<int32_t> q_seq_lens;
+  std::vector<int32_t> new_token_slot_ids;
+  std::vector<std::vector<int32_t>> block_tables_vec;
+  int32_t num_sequences;
+  // num tokens of all workers，mainly used for dp case
+  std::vector<int32_t> dp_global_token_nums;
+  // kv info for disaggregated prefill/decode
+  std::vector<TransferKVInfo> transfer_kv_infos;
+  std::vector<std::vector<float>> embeddings;
+  // num of prefill sequence in chunked prefill case
+  uint32_t prefill_seq_len;
+  // embedding ids of each sequence
+  std::vector<int> embedding_ids;
+};
+
+struct RawSampleOutput {
+  std::vector<RawToken> tokens;  // num tokens
+};
+
+struct RawForwardOutput {
+  std::vector<RawSampleOutput> outputs;  // num seqs
+};
+
+}  // namespace xllm

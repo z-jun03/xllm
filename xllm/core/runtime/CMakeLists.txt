@@ -1,0 +1,90 @@
+include(cc_library)
+include(cc_binary)
+include(cc_test)
+
+cc_library(
+  NAME 
+    runtime
+  HDRS
+    options.h
+    forward_params.h
+    params_utils.h
+    executor.h
+    executor_impl.h
+    npu_executor_impl.h
+    worker.h
+    worker_impl.h
+    llm_worker_impl.h
+    vlm_worker_impl.h
+    embed_worker_impl.h
+    embed_vlm_worker_impl.h
+    engine.h
+    llm_engine.h
+    vlm_engine.h
+    worker_client.h
+    xservice_client.h
+    speculative_engine.h
+    speculative_worker_impl.h
+  SRCS
+    executor.cpp
+    npu_executor_impl.cpp
+    worker.cpp
+    worker_impl.cpp
+    llm_worker_impl.cpp
+    vlm_worker_impl.cpp
+    embed_worker_impl.cpp
+    embed_vlm_worker_impl.cpp
+    llm_engine.cpp
+    vlm_engine.cpp
+    worker_client.cpp
+    xservice_client.cpp
+    params_utils.cpp
+    speculative_engine.cpp
+    speculative_worker_impl.cpp
+  DEPS
+    torch
+    torch_npu
+    :common
+    :request
+    :state_dict
+    :npu_layers
+    :model
+    :models
+    :sampler
+    :tokenizer
+    :model_loader
+    :util
+    :worker_service
+    :xllm_server
+    :xllm_ops
+    glog::glog
+    Folly::folly
+    absl::strings
+    absl::synchronization
+    absl::flat_hash_map
+    proto::xllm_proto
+)
+
+cc_library(
+  NAME 
+    master
+  HDRS
+    llm_master.h
+    master.h
+    vlm_master.h
+  SRCS
+    llm_master.cpp
+    master.cpp
+    vlm_master.cpp
+  DEPS
+    :common
+    :distributed_runtime
+    :scheduler
+    :request
+    :runtime
+    :model
+    :models
+    :npu_layers
+    :chat_template
+    glog::glog
+)

@@ -1,0 +1,51 @@
+include(cc_binary)
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME 
+    block
+  HDRS
+    block.h
+    block_manager.h
+    block_manager_pool.h
+    block_manager_impl.h
+    concurrent_block_manager_impl.h
+  SRCS 
+    block.cpp
+    block_manager_pool.cpp
+    concurrent_block_manager_impl.cpp
+    block_manager_impl.cpp
+  DEPS
+    torch_npu
+    llm_engine
+    graph
+    :request
+    :common
+    glog::glog
+    Boost::serialization
+    SMHasherSupport
+    torch
+)
+
+set(TEST_SRCS
+  block_manager_test.cpp
+)
+
+cc_test(
+  NAME
+    block_test
+  SRCS
+    ${TEST_SRCS}
+  DEPS
+    :block
+    :flags
+    :kv_cache
+    :prefix_cache
+    absl::random_random
+    Boost::serialization
+    GTest::gtest_main
+)
+
+target_link_libraries(block_test PRIVATE brpc OpenSSL::SSL OpenSSL::Crypto)
+add_dependencies(block_test brpc-static)

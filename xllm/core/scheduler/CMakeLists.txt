@@ -1,0 +1,42 @@
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME 
+    scheduler
+  HDRS
+    chunked_prefill_scheduler.h
+    zero_eviction_scheduler.h
+    continuous_scheduler.h
+    disagg_pd_scheduler.h
+    async_response_processor.h
+    scheduler.h
+    scheduler_factory.h
+  SRCS
+    chunked_prefill_scheduler.cpp
+    zero_eviction_scheduler.cpp
+    continuous_scheduler.cpp
+    disagg_pd_scheduler.cpp
+    async_response_processor.cpp
+    scheduler_factory.cpp
+  DEPS
+    :batch
+    :request
+    :runtime
+    glog::glog
+    Folly::folly
+    absl::time
+    absl::synchronization
+)
+
+cc_test(
+  NAME
+    chunked_prefill_scheduler_test
+  SRCS
+    chunked_prefill_scheduler_test.cpp
+  DEPS
+    :scheduler
+    GTest::gtest_main
+)
+target_link_libraries(chunked_prefill_scheduler_test PUBLIC brpc OpenSSL::SSL OpenSSL::Crypto Python::Python ascendcl hccl c_sec nnopbase)
+

@@ -1,0 +1,102 @@
+#include "embedding_service_impl.h"
+
+#include <glog/logging.h>
+
+#include <string>
+
+#include "common/instance_name.h"
+#include "framework/request/request_params.h"
+#include "runtime/llm_master.h"
+#include "util/utils.h"
+#include "util/uuid.h"
+
+namespace xllm {
+namespace {
+
+bool send_result_to_client_brpc(std::shared_ptr<EmbeddingCall> call,
+                                const std::string& request_id,
+                                int64_t created_time,
+                                const std::string& model,
+                                const RequestOutput& req_output) {
+  auto& response = call->response();
+  response.set_object("list");
+  response.set_id(request_id);
+  response.set_created(created_time);
+  response.set_model(model);
+
+  response.mutable_data()->Reserve(req_output.outputs.size());
+  for (const auto& output : req_output.outputs) {
+    // add data into response
+    auto* data = response.add_data();
+    data->set_index(output.index);
+    data->set_object("embedding");
+    if (output.embeddings.has_value()) {
+      data->mutable_embedding()->Add(
+          output.embeddings->data(),
+          output.embeddings->data() + output.embeddings->size());
+    }
+  }
+
+  // add usage statistics
+  if (req_output.usage.has_value()) {
+    const auto& usage = req_output.usage.value();
+    auto* proto_usage = response.mutable_usage();
+    proto_usage->set_prompt_tokens(
+        static_cast<int32_t>(usage.num_prompt_tokens));
+    proto_usage->set_completion_tokens(
+        static_cast<int32_t>(usage.num_generated_tokens));
+    proto_usage->set_total_tokens(static_cast<int32_t>(usage.num_total_tokens));
+  }
+
+  return call->write_and_finish(response);
+}
+
+}  // namespace
+
+EmbeddingServiceImpl::EmbeddingServiceImpl(
+    LLMMaster* master,
+    const std::vector<std::string>& models)
+    : APIServiceImpl(master, models) {}
+
+// embedding_async for brpc
+void EmbeddingServiceImpl::process_async_impl(
+    std::shared_ptr<EmbeddingCall> call) {
+  const auto& rpc_request = call->request();
+  // check if model is supported
+  const auto& model = rpc_request.model();
+  if (!models_.contains(model)) {
+    call->finish_with_error(StatusCode::UNKNOWN, "Model not supported");
+    return;
+  }
+
+  // create RequestParams for embeddings request
+  // set is_embeddings and max_tokens = 1 to control engine step once.
+  RequestParams request_params(
+      rpc_request, call->get_x_request_id(), call->get_x_request_time());
+
+  // TODO only support input_str for now
+  auto& input = rpc_request.input();
+
+  // schedule the request
+  master_->handle_request(
+      std::move(input),
+      std::nullopt,
+      std::move(request_params),
+      [call,
+       model,
+       request_id = request_params.request_id,
+       created_time = absl::ToUnixSeconds(absl::Now())](
+          const RequestOutput& req_output) -> bool {
+        if (req_output.status.has_value()) {
+          const auto& status = req_output.status.value();
+          if (!status.ok()) {
+            return call->finish_with_error(status.code(), status.message());
+          }
+        }
+
+        return send_result_to_client_brpc(
+            call, request_id, created_time, model, req_output);
+      });
+}
+
+}  // namespace xllm

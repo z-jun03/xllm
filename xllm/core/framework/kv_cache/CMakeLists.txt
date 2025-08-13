@@ -1,0 +1,31 @@
+include(cc_binary)
+include(cc_library)
+include(cc_test)
+
+
+cc_library(
+  NAME
+    kv_cache
+  HDRS
+    embedding_allocator.h
+    hccl_kv_cache_transfer.h
+    kv_cache.h
+    kv_cache_event.h
+    kv_cache_transfer.h
+    llm_data_dist_transfer.h
+    spec_kv_cache_transfer.h
+  SRCS
+    embedding_allocator.cpp
+    hccl_kv_cache_transfer.cpp
+    kv_cache.cpp
+    kv_cache_transfer.cpp
+    llm_data_dist_transfer.cpp
+    spec_kv_cache_transfer.cpp
+  DEPS
+    :common
+    graph
+    glog::glog
+    hccl_transfer
+    torch
+    torch_npu
+)

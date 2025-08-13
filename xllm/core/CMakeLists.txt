@@ -1,0 +1,8 @@
+add_subdirectory(common)
+add_subdirectory(distributed_runtime)
+add_subdirectory(framework)
+add_subdirectory(kernels)
+add_subdirectory(layers)
+add_subdirectory(runtime)
+add_subdirectory(scheduler)
+add_subdirectory(util)

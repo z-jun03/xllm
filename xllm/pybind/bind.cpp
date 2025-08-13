@@ -1,0 +1,190 @@
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
+
+#include "core/common/options.h"
+#include "core/common/types.h"
+#include "core/framework/request/request_output.h"
+#include "core/framework/request/request_params.h"
+#include "core/runtime/llm_master.h"
+
+namespace xllm {
+namespace py = pybind11;
+using namespace pybind11::literals;
+
+PYBIND11_MODULE(xllm_export, m) {
+  // 1. export Options
+  py::class_<Options>(m, "Options")
+      .def(py::init())
+      .def_readwrite("model_path", &Options::model_path_)
+      .def_readwrite("devices", &Options::devices_)
+      .def_readwrite("draft_model_path", &Options::draft_model_path_)
+      .def_readwrite("draft_devices", &Options::draft_devices_)
+      .def_readwrite("block_size", &Options::block_size_)
+      .def_readwrite("max_cache_size", &Options::max_cache_size_)
+      .def_readwrite("max_memory_utilization",
+                     &Options::max_memory_utilization_)
+      .def_readwrite("enable_prefix_cache", &Options::enable_prefix_cache_)
+      .def_readwrite("max_tokens_per_batch", &Options::max_tokens_per_batch_)
+      .def_readwrite("max_seqs_per_batch", &Options::max_seqs_per_batch_)
+      .def_readwrite("max_tokens_per_chunk_for_prefill",
+                     &Options::max_tokens_per_chunk_for_prefill_)
+      .def_readwrite("num_speculative_tokens",
+                     &Options::num_speculative_tokens_)
+      .def_readwrite("num_handling_threads", &Options::num_handling_threads_)
+      .def_readwrite("communication_backend", &Options::communication_backend_)
+      .def_readwrite("rank_tablefile", &Options::rank_tablefile_)
+      .def_readwrite("expert_parallel_degree",
+                     &Options::expert_parallel_degree_)
+      .def_readwrite("task_type", &Options::task_type_)
+      .def_readwrite("enable_mla", &Options::enable_mla_)
+      .def_readwrite("enable_chunked_prefill",
+                     &Options::enable_chunked_prefill_)
+      .def_readwrite("master_node_addr", &Options::master_node_addr_)
+      .def_readwrite("nnodes", &Options::nnodes_)
+      .def_readwrite("node_rank", &Options::node_rank_)
+      .def_readwrite("dp_size", &Options::dp_size_)
+      .def_readwrite("ep_size", &Options::ep_size_)
+      .def_readwrite("xservice_addr", &Options::xservice_addr_)
+      .def_readwrite("instance_name", &Options::instance_name_)
+      .def_readwrite("enable_disagg_pd", &Options::enable_disagg_pd_)
+      .def_readwrite("enable_schedule_overlap",
+                     &Options::enable_schedule_overlap_)
+      .def_readwrite("instance_role", &Options::instance_role_)
+      .def_readwrite("kv_cache_transfer_mode",
+                     &Options::kv_cache_transfer_mode_)
+      .def_readwrite("device_ip", &Options::device_ip_)
+      .def_readwrite("transfer_listen_port", &Options::transfer_listen_port_);
+
+  // 2. export LLMMaster
+  py::class_<LLMMaster>(m, "LLMMaster")
+      .def(py::init<const Options&>(),
+           py::arg("options"),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_request",
+           py::overload_cast<std::string,
+                             std::optional<std::vector<int>>,
+                             RequestParams,
+                             OutputCallback>(&LLMMaster::handle_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_request",
+           py::overload_cast<std::vector<Message>,
+                             std::optional<std::vector<int>>,
+                             RequestParams,
+                             OutputCallback>(&LLMMaster::handle_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_batch_request",
+           py::overload_cast<std::vector<std::string>,
+                             std::vector<RequestParams>,
+                             BatchOutputCallback>(
+               &LLMMaster::handle_batch_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_batch_request",
+           py::overload_cast<std::vector<std::vector<Message>>,
+                             std::vector<RequestParams>,
+                             BatchOutputCallback>(
+               &LLMMaster::handle_batch_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("run", &LLMMaster::run, py::call_guard<py::gil_scoped_release>())
+      .def("generate",
+           &LLMMaster::generate,
+           py::call_guard<py::gil_scoped_release>())
+      .def("get_cache_info",
+           &LLMMaster::get_cache_info,
+           py::call_guard<py::gil_scoped_release>())
+      .def("link_cluster",
+           &LLMMaster::link_cluster,
+           py::call_guard<py::gil_scoped_release>())
+      .def("unlink_cluster",
+           &LLMMaster::unlink_cluster,
+           py::call_guard<py::gil_scoped_release>())
+      .def("options",
+           &LLMMaster::options,
+           py::call_guard<py::gil_scoped_release>())
+      .def("get_rate_limiter",
+           &LLMMaster::get_rate_limiter,
+           py::call_guard<py::gil_scoped_release>())
+      .def("__repr__", [](const LLMMaster& self) {
+        return "LLMMaster({})"_s.format(self.options());
+      });
+
+  // 3. export RequestParams
+  py::class_<RequestParams>(m, "RequestParams")
+      .def(py::init())
+      .def_readwrite("request_id", &RequestParams::request_id)
+      .def_readwrite("service_request_id", &RequestParams::service_request_id)
+      .def_readwrite("x_request_id", &RequestParams::x_request_id)
+      .def_readwrite("x_request_time", &RequestParams::x_request_time)
+      .def_readwrite("max_tokens", &RequestParams::max_tokens)
+      .def_readwrite("n", &RequestParams::n)
+      .def_readwrite("best_of", &RequestParams::best_of)
+      .def_readwrite("echo", &RequestParams::echo)
+      .def_readwrite("frequency_penalty", &RequestParams::frequency_penalty)
+      .def_readwrite("presence_penalty", &RequestParams::presence_penalty)
+      .def_readwrite("repetition_penalty", &RequestParams::repetition_penalty)
+      .def_readwrite("temperature", &RequestParams::temperature)
+      .def_readwrite("top_p", &RequestParams::top_p)
+      .def_readwrite("top_k", &RequestParams::top_k)
+      .def_readwrite("logprobs", &RequestParams::logprobs)
+      .def_readwrite("top_logprobs", &RequestParams::top_logprobs)
+      .def_readwrite("skip_special_tokens", &RequestParams::skip_special_tokens)
+      .def_readwrite("ignore_eos", &RequestParams::ignore_eos)
+      .def_readwrite("is_embeddings", &RequestParams::is_embeddings)
+      .def_readwrite("stop", &RequestParams::stop)
+      .def_readwrite("stop_token_ids", &RequestParams::stop_token_ids);
+
+  // 4. export RequestOutput
+  py::class_<RequestOutput>(m, "RequestOutput")
+      .def(py::init())
+      .def_readwrite("request_id", &RequestOutput::request_id)
+      .def_readwrite("service_request_id", &RequestOutput::service_request_id)
+      .def_readwrite("prompt", &RequestOutput::prompt)
+      .def_readwrite("status", &RequestOutput::status)
+      .def_readwrite("outputs", &RequestOutput::outputs)
+      .def_readwrite("usage", &RequestOutput::usage)
+      .def_readwrite("finished", &RequestOutput::finished)
+      .def_readwrite("cancelled", &RequestOutput::cancelled);
+
+  // 5. export StatusCode
+  py::enum_<StatusCode>(m, "StatusCode")
+      .value("OK", StatusCode::OK)
+      .value("CANCELLED", StatusCode::CANCELLED)
+      .value("UNKNOWN", StatusCode::UNKNOWN)
+      .value("INVALID_ARGUMENT", StatusCode::INVALID_ARGUMENT)
+      .value("DEADLINE_EXCEEDED", StatusCode::DEADLINE_EXCEEDED)
+      .value("RESOURCE_EXHAUSTED", StatusCode::RESOURCE_EXHAUSTED)
+      .export_values();
+
+  // 6. export Status
+  py::class_<Status>(m, "Status")
+      .def(py::init<StatusCode, const std::string&>(),
+           py::arg("code"),
+           py::arg("message"))
+      .def_property_readonly("code", &Status::code)
+      .def_property_readonly("message", &Status::message)
+      .def_property_readonly("ok", &Status::ok)
+      .def("__repr__", [](const Status& self) {
+        if (self.message().empty()) {
+          return "Status(code={})"_s.format(self.code());
+        }
+        return "Status(code={}, message={!r})"_s.format(self.code(),
+                                                        self.message());
+      });
+
+  // 7. export SequenceOutput
+  py::class_<SequenceOutput>(m, "SequenceOutput")
+      .def(py::init())
+      .def_readwrite("index", &SequenceOutput::index)
+      .def_readwrite("text", &SequenceOutput::text)
+      .def_readwrite("embedding", &SequenceOutput::embedding)
+      .def_readwrite("token_ids", &SequenceOutput::token_ids)
+      .def_readwrite("finish_reason", &SequenceOutput::finish_reason)
+      .def_readwrite("logprobs", &SequenceOutput::logprobs)
+      .def_readwrite("embeddings", &SequenceOutput::embeddings)
+      .def("__repr__", [](const SequenceOutput& self) {
+        return "SequenceOutput({}: {!r})"_s.format(self.index, self.text);
+      });
+}
+
+}  // namespace xllm

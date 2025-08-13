@@ -1,0 +1,38 @@
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME 
+    sampler
+  HDRS
+    sampling_params.h
+    logits_utils.h
+    rejection_sampler.h
+    sampler.h
+  SRCS
+    sampling_params.cpp
+    logits_utils.cpp
+    rejection_sampler.cpp
+    sampler.cpp
+  DEPS
+    glog::glog
+    torch
+    xllm_ops
+)
+
+cc_test(
+  NAME
+    rejection_sampler_test
+  SRCS
+    rejection_sampler_test.cpp
+    rejection_sampler.cpp
+  DEPS
+    absl::strings
+    GTest::gtest_main
+    :flags
+    :sampler
+    glog::glog
+)
+target_link_libraries(rejection_sampler_test PRIVATE brpc OpenSSL::SSL OpenSSL::Crypto leveldb::leveldb ZLIB::ZLIB protobuf::libprotobuf)
+target_link_libraries(rejection_sampler_test PUBLIC Python::Python ascendcl hccl c_sec nnopbase)
+add_dependencies(rejection_sampler_test brpc-static)

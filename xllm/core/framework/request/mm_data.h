@@ -1,0 +1,112 @@
+#pragma once
+
+#include <torch/torch.h>
+
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <variant>
+#include <vector>
+
+namespace xllm {
+
+class MMType {
+ public:
+  enum Value : uint32_t {
+    NONE = 0,
+    IMAGE = 1 << 0,
+    VIDEO = 1 << 1,
+    AUDIO = 1 << 2,
+    EMBEDDING = 1 << 3
+  };
+
+  MMType() = default;
+  MMType(Value v) : value(v) {}
+  operator Value() const { return value; }
+  explicit operator bool() const = delete;
+
+  bool operator==(MMType rhs) const { return value == rhs.value; }
+  bool operator!=(MMType rhs) const { return value != rhs.value; }
+
+  bool operator==(Value v) const { return value == v; }
+  bool operator!=(Value v) const { return value != v; }
+
+  std::optional<std::string> to_string();
+
+ private:
+  Value value = Value::NONE;
+};
+
+using MMKey = std::string;
+using MMValue = std::variant<torch::Tensor, std::vector<torch::Tensor>>;
+using MMDict = std::unordered_map<MMKey, MMValue>;
+
+struct MMData {
+  MMData() = default;
+  MMData(uint32_t ty, const MMDict& data) : ty_(ty), data_(std::move(data)) {}
+
+  bool has(uint32_t type) const { return type & ty_ != 0; }
+  bool has(const MMKey& key) const {
+    if (!valid()) return false;
+
+    const auto& itor = data_.find(key);
+    if (itor != data_.end())
+      return true;
+    else
+      return false;
+  }
+
+  template <typename T>
+  bool add(uint32_t type, const MMKey& key, const T& value) {
+    const auto& itor = data_.find(key);
+    if (itor != data_.end()) return false;
+
+    ty_ |= type;
+    data_.insert({key, value});
+    return true;
+  }
+
+  template <typename T>
+  std::optional<T> get(const MMKey& key) const {
+    if (!valid()) return std::nullopt;
+
+    const auto& itor = data_.find(key);
+    if (itor != data_.end())
+      return std::get<T>(itor->second);
+    else
+      return std::nullopt;
+  }
+
+  std::vector<torch::Tensor> get_tensor_vec(const MMKey& key) const {
+    if (!valid()) return {};
+
+    const auto& itor = data_.find(key);
+    if (itor == data_.end()) return {};
+
+    if (std::holds_alternative<torch::Tensor>(itor->second)) {
+      return {std::get<torch::Tensor>(itor->second)};
+    } else if (std::holds_alternative<std::vector<torch::Tensor>>(
+                   itor->second)) {
+      return std::get<std::vector<torch::Tensor>>(itor->second);
+    } else {
+      assert(0);
+      return {};
+    }
+  }
+
+  bool valid() const { return ty_ != MMType::NONE; }
+
+  uint32_t type() const { return ty_; }
+
+  const MMDict& data() const { return data_; }
+
+  void debug_print() const;
+
+  static MMData to(const MMData& mm_data, const torch::Device& device);
+  static MMData batch(const std::vector<MMData>& mm_datas);
+
+  uint32_t ty_ = MMType::NONE;
+  MMDict data_;
+};
+
+}  // namespace xllm

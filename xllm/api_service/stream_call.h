@@ -1,0 +1,125 @@
+#pragma once
+
+#include <brpc/controller.h>
+#include <butil/iobuf.h>
+#include <glog/logging.h>
+#include <json2pb/pb_to_json.h>
+
+#include <atomic>
+#include <memory>
+#include <optional>
+#include <string>
+
+#include "api_service/call.h"
+#include "core/common/types.h"
+
+namespace xllm {
+
+template <typename Request, typename Response>
+class StreamCall : public Call {
+ public:
+  using ReqType = Request;
+  using ResType = Response;
+
+  StreamCall(brpc::Controller* controller,
+             ::google::protobuf::Closure* done,
+             Request* request,
+             Response* response)
+      : Call(controller), done_(done), request_(request), response_(response) {
+    stream_ = request_->stream();
+    if (stream_) {
+      pa_ = controller_->CreateProgressiveAttachment();
+
+      // Send the first SSE response
+      controller_->http_response().set_content_type("text/event-stream");
+      controller_->http_response().set_status_code(200);
+      controller_->http_response().SetHeader("Connection", "keep-alive");
+      controller_->http_response().SetHeader("Cache-Control", "no-cache");
+      // Done Run first for steam response
+      done_->Run();
+
+    } else {
+      controller_->http_response().SetHeader("Content-Type",
+                                             "text/javascript; charset=utf-8");
+    }
+
+    json_options_.bytes_to_base64 = false;
+    json_options_.jsonify_empty_array = true;
+  }
+
+  ~StreamCall() override {
+    // For non stream response, call brpc done Run
+    if (!stream_) {
+      done_->Run();
+    }
+  }
+
+  bool write_and_finish(Response& response) {
+    butil::IOBufAsZeroCopyOutputStream json_output(
+        &controller_->response_attachment());
+    std::string err_msg;
+    if (!json2pb::ProtoMessageToJson(
+            response, &json_output, json_options_, &err_msg)) {
+      return finish_with_error(StatusCode::UNKNOWN, err_msg);
+    }
+    return true;
+  }
+
+  bool finish_with_error(const StatusCode& code,
+                         const std::string& error_message) {
+    if (!stream_) {
+      controller_->SetFailed(error_message);
+
+    } else {
+      io_buf_.clear();
+      io_buf_.append(error_message);
+      pa_->Write(io_buf_);
+    }
+
+    return true;
+  }
+
+  // For stream response
+  bool write(Response& response) {
+    io_buf_.clear();
+    io_buf_.append("data: ");
+    butil::IOBufAsZeroCopyOutputStream json_output(&io_buf_);
+    std::string err_msg;
+    if (!json2pb::ProtoMessageToJson(
+            response, &json_output, json_options_, &err_msg)) {
+      LOG(ERROR) << "Failed to convert proto to json: " << err_msg;
+      return false;
+    }
+    io_buf_.append("\n\n");
+
+    pa_->Write(io_buf_);
+    return true;
+  }
+
+  // For stream response
+  bool finish() {
+    io_buf_.clear();
+    io_buf_.append("data: [DONE]\n\n");
+
+    pa_->Write(io_buf_);
+    return true;
+  }
+
+  const Request& request() const { return *request_; }
+  Response& response() { return *response_; }
+  ::google::protobuf::Closure* done() { return done_; }
+
+ private:
+  ::google::protobuf::Closure* done_;
+
+  Request* request_;
+  Response* response_;
+
+  bool stream_ = false;
+  butil::intrusive_ptr<brpc::ProgressiveAttachment> pa_;
+  butil::IOBuf io_buf_;
+
+  json2pb::Pb2JsonOptions json_options_;
+};
+
+}  // namespace xllm

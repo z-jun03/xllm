@@ -1,0 +1,60 @@
+include(cc_library)
+include(cc_test)
+
+include_directories(.)
+
+add_subdirectory(batch)
+add_subdirectory(block)
+add_subdirectory(chat_template)
+add_subdirectory(kv_cache)
+add_subdirectory(model)
+add_subdirectory(prefix_cache)
+add_subdirectory(request)
+add_subdirectory(sampling)
+add_subdirectory(state_dict)
+add_subdirectory(tokenizer)
+
+cc_library(
+  NAME 
+    parallel_state
+  HDRS
+    mapping_npu.h
+    parallel_state.h
+  SRCS
+    mapping_npu.cpp
+    parallel_state.cpp
+  DEPS
+    :common
+    torch
+    glog::glog
+)
+
+cc_test(
+  NAME 
+    mapping_npu_test
+  SRCS
+    mapping_npu_test.cpp
+  DEPS
+    parallel_state
+    absl::synchronization
+    absl::time
+    GTest::gtest_main
+)
+
+cc_library(
+  NAME 
+    model_loader
+  HDRS
+    hf_model_loader.h
+    model_loader.h
+  SRCS
+    hf_model_loader.cpp
+    model_loader.cpp
+  DEPS
+    :common
+    :model
+    :models
+    :npu_layers
+    :tokenizer
+    torch
+)

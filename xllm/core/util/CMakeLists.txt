@@ -1,0 +1,73 @@
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME
+    util
+  HDRS
+    blocking_counter.h
+    closure_guard.h
+    concurrent_queue.h
+    device_name_utils.h
+    double_buffer.h
+    env_var.h
+    hash_util.h
+    json_reader.h
+    net.h
+    pretty_print.h
+    scope_guard.h
+    slice.h
+    spin_lock.h
+    spin_rw_lock.h
+    tensor_helper.h
+    threadpool.h
+    timer.h
+    type_traits.h
+    utils.h
+    uuid.h
+  SRCS
+    device_name_utils.cpp
+    env_var.cpp
+    hash_util.cpp
+    json_reader.cpp
+    net.cpp
+    pretty_print.cpp
+    threadpool.cpp
+    timer.cpp
+    utils.cpp
+    uuid.cpp
+  DEPS
+    torch
+    brpc
+    nlohmann_json::nlohmann_json
+    glog::glog
+    torch
+    torch_npu
+    ms_tools_ext
+    SMHasherSupport
+    Boost::serialization
+)
+target_link_libraries(util PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+add_dependencies(util brpc-static)
+
+cc_test(
+  NAME
+    util_test
+  SRCS
+    blocking_counter_test.cpp
+    hash_util_test.cpp
+    threadpool_test.cpp
+  DEPS
+    util
+    absl::synchronization
+    absl::time
+    GTest::gtest_main
+    gflags::gflags
+)
+target_link_libraries(util_test PRIVATE brpc OpenSSL::SSL OpenSSL::Crypto)
+add_dependencies(util_test brpc-static)
+
+
+
+
+

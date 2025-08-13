@@ -1,0 +1,34 @@
+include(cc_library)
+
+cc_library(
+  NAME 
+    api_service
+  HDRS
+    api_service.h
+    api_service_impl.h
+    call.h
+    completion_service_impl.h
+    chat_service_impl.h
+    embedding_service_impl.h
+    non_stream_call.h
+    service_impl_factory.h
+    stream_call.h
+    models_service_impl.h
+  SRCS
+    api_service.cpp
+    call.cpp
+    completion_service_impl.cpp
+    chat_service_impl.cpp
+    embedding_service_impl.cpp
+    models_service_impl.cpp
+  DEPS
+    :master
+    :chat_template
+    :util
+    glog::glog
+    proto::xllm_proto
+    absl::flat_hash_set
+    absl::random_random
+    :function_call
+)
+

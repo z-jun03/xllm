@@ -1,0 +1,54 @@
+#pragma once
+
+#include <vector>
+
+#include "block_manager.h"
+#include "framework/request/request.h"
+#include "framework/request/sequence.h"
+
+namespace xllm {
+
+class BlockManagerPool {
+ public:
+  explicit BlockManagerPool(const BlockManager::Options& options,
+                            int32_t dp_size = 1);
+
+  ~BlockManagerPool() = default;
+
+  bool allocate(Sequence* sequence);
+  bool allocate(std::vector<Sequence*>& sequences);
+  bool allocate(Sequence* sequence, size_t num_tokens);
+
+  // Try to allocate blocks with num_tokens,
+  // return {} if not enough blocks
+  std::vector<Block> allocate(size_t num_tokens, int32_t& dp_rank);
+
+  void deallocate(Request* request);
+  void deallocate(std::vector<Sequence*>& sequences);
+  void deallocate(Sequence* sequence);
+
+  void allocate_shared(Sequence* sequence);
+  void cache(Sequence* sequence);
+
+  void get_merged_kvcache_event(KvCacheEvent* event) const;
+  float get_gpu_cache_usage_perc() const;
+
+  std::vector<size_t> num_blocks_in_prefix_cache() const;
+  std::vector<size_t> num_free_blocks() const;
+  std::vector<size_t> num_used_blocks() const;
+  double kv_cache_utilization() const;
+
+  // get the options for the block manager
+  const BlockManager::Options& options() const { return options_; }
+
+ private:
+  int32_t get_manager_with_max_free_blocks() const;
+  int32_t get_dp_rank(Sequence* sequence) const;
+
+  std::vector<std::unique_ptr<BlockManager>> block_managers_;
+
+  // the options for the block manager
+  BlockManager::Options options_;
+};
+
+}  // namespace xllm

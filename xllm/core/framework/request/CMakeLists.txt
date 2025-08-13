@@ -1,0 +1,47 @@
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME 
+    request
+  HDRS
+    finish_reason.h
+    incremental_decoder.h
+    mm_data.h
+    mm_input_helper.h
+    request.h
+    request_output.h
+    request_params.h
+    sequence.h
+    sequence_logprob_state.h
+    sequence_kv_state.h
+    sequences_group.h
+    request_state.h
+    stopping_checker.h
+  SRCS
+    finish_reason.cpp
+    incremental_decoder.cpp
+    mm_data.cpp
+    mm_input_helper.cpp
+    request.cpp
+    request_output.cpp
+    request_params.cpp
+    sequence.cpp
+    sequence_logprob_state.cpp
+    sequence_kv_state.cpp
+    sequences_group.cpp
+    request_state.cpp
+    stopping_checker.cpp
+  DEPS
+    :kv_cache
+    :prefix_cache
+    :block
+    :tokenizer
+    :chat_template
+    glog::glog
+    absl::strings
+    absl::time
+    proto::xllm_proto
+    torch
+)
+

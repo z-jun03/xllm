@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+option go_package = "jd.com/jd-infer/xllm;xllm";
+package xllm.proto;
+option cc_generic_services = true;
+
+import "common.proto";
+import "xllm_service.proto";
+
+// request from prefill to decode.
+// NOTE: maybe we should dispatch request to decod instance by xllm_service.
+message DisaggRequests {
+  // prefill instance name(ID)
+  string prefill_name = 1;
+  repeated DisaggRequest reqs = 2;
+  ClusterInfos cluster_infos = 3;
+}
+
+message StopSequence {
+  repeated int32 seq_tokens = 1;
+}
+
+message DisaggRequest {
+  // req id
+  string req_id = 1;
+  // req id which is generated in xllm service
+  string service_req_id = 2;
+  // tokens num decide the blocks slots
+  int64 tokens_num = 3;
+  // request fields
+  string prompt = 4;
+  bool stream = 5;
+  string x_request_id = 6;
+  string x_request_time = 7;
+  int32 max_tokens = 8;
+  int32 max_context_len = 9;
+  int32 seq_capacity = 10;
+  bool ignore_eos = 11;
+  int32 eos_token_id = 12;
+  repeated int32 stop_token_ids = 13;
+  repeated StopSequence stop_sequences = 14;
+  int32 n = 15;
+  int32 best_of = 16;
+  float frequency_penalty = 17;
+  float presence_penalty = 18;
+  float repetition_penalty = 19;
+  float temperature = 20;
+  float top_p = 21;
+  int64 top_k = 22;
+  bool logprobs = 23;
+  int64 top_logprobs = 24;
+  bool is_embeddings = 25;
+  bool echo = 26;
+  bool skip_special_tokens = 27;
+  repeated int32 prompt_tokens = 28;
+}
+
+// response for DisaggRequests from decode instance.
+message DisaggResponses {
+  repeated DisaggResponse resps = 1;
+}
+
+message DisaggResponse {
+  // req id
+  string req_id = 1;
+  // http code
+  int32 status_code = 2;
+  // blocks ids allocated for request.
+  repeated int32 blocks_ids = 3;
+  int32 dp_rank = 4;
+}
+
+// TODO: support multi sequences in one request.
+//       Now only consider one sequence case.
+// TODO: support embedding, now we only support tokens.
+message DisaggGeneration {
+  // req id
+  string req_id = 1;
+  // token id
+  int64 token_id = 2;
+  bool has_logprob = 3;
+  float logprob = 4;
+  repeated int64 top_tokens = 5;
+  repeated float top_logprobs = 6;
+  string kv_cache_transfer_mode = 7;
+  repeated uint64 cluster_ids = 8;
+  repeated string addrs = 14;
+  repeated int64 k_cache_ids = 9;
+  repeated int64 v_cache_ids = 10;
+  repeated int32 block_ids = 11;
+  int32 dp_size = 12;
+  int32 dp_rank = 13;
+}
+
+// First token from prefill instance to decode instance.
+message DisaggGenerations {
+  repeated DisaggGeneration gens = 1;
+}
+
+message OutputUsage {
+  // the number of tokens in the prompt.
+  int32 num_prompt_tokens = 1;
+  // the number of tokens in the generated completion.
+  int32 num_generated_tokens = 2;
+  // the total number of tokens used in the request (prompt + completion).
+  int32 num_total_tokens = 3;
+}
+
+message LogProbData {
+  // the text of the token
+  string token = 1;
+  // the token id
+  int32 token_id = 2;
+  // the log probability of the token
+  float logprob = 3;
+  // whether the token is finished
+  bool finished_token = 4;
+}
+
+message LogProb {
+  LogProbData log_prob_data = 1;
+  repeated LogProbData top_logprobs = 2;
+}
+
+message SequenceOutput {
+  // the index of the sequence in the request.
+  int32 index = 1;
+  // the generated/delta text.
+  // delta text is the text generated since the last response for streaming.
+  string text = 2;
+  // the token ids of the generated text.
+  repeated int32 token_ids = 3;
+  // the reason the sequence finished.
+  string finish_reason = 4;
+  // log probabilities of the generated tokens.
+  repeated LogProb logprobs = 5;
+}
+
+message GenerationStatus {
+  int32 status_code = 1;
+  string status_msg = 2;
+}
+
+// Stream response token to prefill instance from decode.
+message DisaggStreamGeneration {
+  // req id
+  string req_id = 1;
+  // req id which is generated in xllm service.
+  string service_req_id = 2;
+  // the status of the request
+  GenerationStatus gen_status = 3;
+  // maybe multi sequences in the request
+  repeated SequenceOutput outputs = 4;
+  OutputUsage usage = 5;
+  bool finished = 6;
+}
+
+message DisaggStreamGenerations {
+  repeated DisaggStreamGeneration gens = 1;
+}
+
+message StatusSet {
+  repeated Status all_status = 1;
+}
+
+service DisaggPDService {
+  rpc Generation(DisaggStreamGeneration) returns (Status) {}
+  rpc Generations(DisaggStreamGenerations) returns (StatusSet) {}
+  rpc AddNewRequests(DisaggRequests) returns (DisaggResponses) {}
+  rpc FirstGeneration(DisaggGenerations) returns (Status) {}
+}
+

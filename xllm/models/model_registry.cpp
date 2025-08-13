@@ -1,0 +1,203 @@
+#include "model_registry.h"
+
+#include <glog/logging.h>
+
+#include "models.h"
+
+namespace xllm {
+
+ModelRegistry* ModelRegistry::get_instance() {
+  static ModelRegistry registry;
+
+  return &registry;
+}
+
+void ModelRegistry::register_causallm_factory(const std::string& name,
+                                              CausalLMFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].causal_lm_factory != nullptr) {
+    LOG(WARNING) << "causal lm factory for " << name << "already registered.";
+  } else {
+    instance->model_registry_[name].causal_lm_factory = factory;
+  }
+}
+
+void ModelRegistry::register_causalvlm_factory(const std::string& name,
+                                               CausalVLMFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].causal_vlm_factory != nullptr) {
+    LOG(WARNING) << "causal vlm factory for " << name << "already registered.";
+  } else {
+    instance->model_registry_[name].causal_vlm_factory = factory;
+  }
+}
+
+void ModelRegistry::register_embeddinglm_factory(const std::string& name,
+                                                 EmbeddingLMFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].embedding_lm_factory != nullptr) {
+    LOG(WARNING) << "embedding lm factory for " << name
+                 << "already registered.";
+  } else {
+    instance->model_registry_[name].embedding_lm_factory = factory;
+  }
+}
+
+void ModelRegistry::register_input_processor_factory(
+    const std::string& name,
+    InputProcessorFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].input_processor_factory != nullptr) {
+    LOG(WARNING) << "input processor factory for " << name
+                 << "already registered.";
+  } else {
+    instance->model_registry_[name].input_processor_factory = factory;
+  }
+}
+
+void ModelRegistry::register_image_processor_factory(
+    const std::string& name,
+    ImageProcessorFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].image_processor_factory != nullptr) {
+    LOG(WARNING) << "image processor factory for " << name
+                 << "already registered.";
+  } else {
+    instance->model_registry_[name].image_processor_factory = factory;
+  }
+}
+
+void ModelRegistry::register_model_args_loader(const std::string& name,
+                                               ModelArgsLoader loader) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].model_args_loader != nullptr) {
+    LOG(WARNING) << "model args loader for " << name << "already registered.";
+  } else {
+    instance->model_registry_[name].model_args_loader = loader;
+  }
+}
+
+void ModelRegistry::register_quant_args_loader(const std::string& name,
+                                               QuantArgsLoader loader) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].quant_args_loader != nullptr) {
+    LOG(WARNING) << "quant args loader for " << name << "already registered.";
+  } else {
+    instance->model_registry_[name].quant_args_loader = loader;
+  }
+}
+
+void ModelRegistry::register_tokenizer_args_loader(const std::string& name,
+                                                   TokenizerArgsLoader loader) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].tokenizer_args_loader != nullptr) {
+    LOG(WARNING) << "tokenizer args loader for " << name
+                 << "already registered.";
+  } else {
+    instance->model_registry_[name].tokenizer_args_loader = loader;
+  }
+}
+
+CausalLMFactory ModelRegistry::get_causallm_factory(const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].causal_lm_factory;
+}
+
+CausalVLMFactory ModelRegistry::get_causalvlm_factory(const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].causal_vlm_factory;
+}
+
+EmbeddingLMFactory ModelRegistry::get_embeddinglm_factory(
+    const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].embedding_lm_factory;
+}
+
+InputProcessorFactory ModelRegistry::get_input_processor_factory(
+    const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].input_processor_factory;
+}
+
+ImageProcessorFactory ModelRegistry::get_image_processor_factory(
+    const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].image_processor_factory;
+}
+
+ModelArgsLoader ModelRegistry::get_model_args_loader(const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].model_args_loader;
+}
+
+QuantArgsLoader ModelRegistry::get_quant_args_loader(const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].quant_args_loader;
+}
+
+TokenizerArgsLoader ModelRegistry::get_tokenizer_args_loader(
+    const std::string& name) {
+  ModelRegistry* instance = get_instance();
+
+  return instance->model_registry_[name].tokenizer_args_loader;
+}
+
+std::unique_ptr<CausalLM> create_llm_model(const Context& context) {
+  // get the factory function for the model type from model registry
+  auto factory = ModelRegistry::get_causallm_factory(
+      context.get_model_args().model_type());
+  if (factory) {
+    return factory(context);
+  }
+
+  LOG(ERROR) << "Unsupported model type: "
+             << context.get_model_args().model_type();
+
+  return nullptr;
+}
+
+std::unique_ptr<CausalVLM> create_vlm_model(const Context& context) {
+  // get the factory function for the model type from model registry
+  auto factory = ModelRegistry::get_causalvlm_factory(
+      context.get_model_args().model_type());
+  if (factory) {
+    return factory(context);
+  }
+
+  LOG(ERROR) << "Unsupported model type: "
+             << context.get_model_args().model_type();
+
+  return nullptr;
+}
+
+std::unique_ptr<EmbeddingLM> create_embeddinglm_model(const Context& context) {
+  // get the factory function for the model type from model registry
+  auto factory = ModelRegistry::get_embeddinglm_factory(
+      context.get_model_args().model_type());
+  if (factory) {
+    return factory(context);
+  }
+
+  LOG(ERROR) << "Unsupported model type: "
+             << context.get_model_args().model_type();
+
+  return nullptr;
+}
+
+}  // namespace xllm
