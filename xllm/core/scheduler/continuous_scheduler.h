@@ -17,10 +17,12 @@ limitations under the License.
 
 #include <absl/time/time.h>
 #include <folly/MPMCQueue.h>
+#include <folly/futures/Future.h>
 
 #include <limits>
 #include <memory>
 #include <queue>
+#include <unordered_map>
 
 #include "async_response_processor.h"
 #include "common/macros.h"
@@ -213,6 +215,9 @@ class ContinuousScheduler : public Scheduler {
       size_t& num_online_decode_preempt_online_requests,
       size_t& num_online_decode_preempt_offline_requests,
       std::unique_ptr<DecodePriorityQueue>& running_queue);
+
+  virtual void prepare_cache_async(std::shared_ptr<Request>& request);
+
   void handle_abnormal_request(
       std::unique_ptr<DecodePriorityQueue>& running_queue,
       const std::vector<Sequence*>& candidate_sequences,

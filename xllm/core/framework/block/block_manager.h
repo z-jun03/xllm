@@ -46,7 +46,7 @@ class BlockManager {
     PROPERTY(int32_t, block_size) = 0;
     PROPERTY(bool, enable_prefix_cache) = true;
     PROPERTY(bool, enable_disagg_pd) = false;
-    PROPERTY(bool, enable_service_routing) = false;
+    PROPERTY(bool, enable_cache_upload) = false;
   };
 
   explicit BlockManager(Options options) : options_(options) {}
@@ -61,7 +61,7 @@ class BlockManager {
       const Slice<Block>& existed_shared_blocks = {}) = 0;
 
   virtual void cache(const Slice<int32_t>& token_ids,
-                     const Slice<Block>& blocks) = 0;
+                     std::vector<Block>& blocks) = 0;
 
   // get merged all dp rank KVCacheEvent
   virtual void get_merged_kvcache_event(KvCacheEvent* event) const = 0;
