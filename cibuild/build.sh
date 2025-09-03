@@ -31,4 +31,4 @@ CMD="$*"
 
 [[ ! -x $(command -v docker) ]] && echo "ERROR: 'docker' command is missing." && exit 1
 
-docker run "${RUN_OPTS[@]}" "${IMAGE}" bash -c "cd $(pwd); ${CMD}"
+docker run "${RUN_OPTS[@]}" "${IMAGE}" bash -c "set -euo pipefail; cd $(pwd); ${CMD}"

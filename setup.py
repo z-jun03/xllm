@@ -234,6 +234,7 @@ class ExtBuild(build_ext):
                 "CMake must be installed to build the following extensions: "
                 + ", ".join(e.name for e in self.extensions)
             )
+            exit(1)
 
         match = re.search(
             r"version\s*(?P<major>\d+)\.(?P<minor>\d+)([\d.]+)?", out.decode()
@@ -242,9 +243,13 @@ class ExtBuild(build_ext):
         if (cmake_major, cmake_minor) < (3, 18):
             raise RuntimeError("CMake >= 3.18.0 is required")
 
-        # build extensions
-        for ext in self.extensions:
-            self.build_extension(ext)
+        try:
+            # build extensions
+            for ext in self.extensions:
+                self.build_extension(ext)
+        except Exception as e:
+            print("Build failed.")
+            exit(1)
 
     def build_extension(self, ext: CMakeExtension):
         ninja_dir = shutil.which("ninja")
@@ -405,9 +410,13 @@ class TestUT(Command):
                 print(line, end='')
 
             return_code = process.wait()
+            if return_code != 0:
+              print("Testing failed.")
+              exit(1)
             return return_code
         except subprocess.CalledProcessError as e:
             print(e.stderr)
+            exit(1)
 
     def run(self):
         self.run_ctest(get_cmake_dir())

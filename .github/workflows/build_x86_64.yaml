@@ -53,4 +53,4 @@ jobs:
       timeout-minutes: 60
       run: |
         chmod +x ./cibuild/build.sh
-        bash cibuild/build.sh 'pip uninstall setuptools -y; pip install setuptools -i https://pypi.tuna.tsinghua.edu.cn/simple; pip install pre-commit -i https://pypi.tuna.tsinghua.edu.cn/simple; python setup.py build'
+        bash cibuild/build.sh 'pip uninstall setuptools -y; pip install setuptools -i https://pypi.tuna.tsinghua.edu.cn/simple; pip install pre-commit -i https://pypi.tuna.tsinghua.edu.cn/simple; python setup.py build; python setup.py test'
