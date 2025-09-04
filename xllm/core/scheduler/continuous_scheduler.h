@@ -67,7 +67,8 @@ class ContinuousScheduler : public Scheduler {
     // for master service, current instance name(ID).
     PROPERTY(std::optional<std::string>, instance_name);
 
-    PROPERTY(std::optional<InstanceRole>, instance_role);
+    PROPERTY(std::optional<InstanceRole>,
+             instance_role) = InstanceRole::DEFAULT;
 
     PROPERTY(std::string, kv_cache_transfer_mode) = "PUSH";
 
