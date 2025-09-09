@@ -100,7 +100,6 @@ inline void print_tensor(const torch::Tensor& tensor,
     LOG(INFO) << "First " << max_elements << " elements: \n"
               << front_elements << std::endl;
 
-    // 打印后 num 个元素
     int back_num = flat_tensor.size(0) > num ? num : flat_tensor.size(0);
     // const auto& back_elements = flat_tensor.slice(0, flat_tensor.size(0) -
     // back_num, flat_tensor.size(0));
@@ -117,7 +116,7 @@ inline void print_tensor(const torch::Tensor& tensor,
 
 inline bool file_exists(const std::string& path) {
   std::ifstream file(path);
-  return file.good();  // 文件可以打开
+  return file.good();
 }
 
 }  // namespace xllm

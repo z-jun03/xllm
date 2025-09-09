@@ -313,7 +313,8 @@ std::tuple<int32_t, int32_t> MappingNPU::get_current_group_id(
 nlohmann::json MappingNPU::to_json() {
   nlohmann::json data, lmhead_tp, lmhead_dp;
 
-  // 开启lmhead后数据以dp策略形式输出
+  // when enable lmhead, the data is output in
+  // the form of a data parallel (DP) strategy.
   if (ENV_enable_dp_partition_up) {
     lmhead_tp = attn_tp_.to_json();
     lmhead_dp = attn_dp_.to_json();

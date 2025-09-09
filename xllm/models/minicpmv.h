@@ -356,7 +356,8 @@ torch::Tensor get_2d_sincos_pos_embed(int embed_dim,
 
   auto grid_h = torch::arange(grid_h_size, torch::kFloat32);
   auto grid_w = torch::arange(grid_w_size, torch::kFloat32);
-  auto grid = torch::meshgrid({grid_w, grid_h}, "xy");     // 注意：w 在前
+  auto grid =
+      torch::meshgrid({grid_w, grid_h}, "xy");  // NOTE: w is ahead of h.
   auto grid_tensor = torch::stack({grid[0], grid[1]}, 0);  // (2, H, W)
 
   if (version == std::make_pair(2, 0)) {

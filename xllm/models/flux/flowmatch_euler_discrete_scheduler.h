@@ -25,7 +25,8 @@ struct FlowMatchEulerDiscreteSchedulerOutput {
 };
 class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
  private:
-  // 配置参数（原config结构体的成员变量）
+  // Configuration parameters (member variables of the original config
+  // structure)
   int num_train_timesteps_;
   float shift_;
   bool use_dynamic_shifting_;
@@ -41,7 +42,7 @@ class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
   std::string time_shift_type_;
   bool stochastic_sampling_;
 
-  // 状态变量
+  // State variables
   torch::Tensor timesteps_;
   torch::Tensor sigmas_;
   float sigma_min_;
@@ -49,7 +50,7 @@ class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
   std::optional<int> step_index_;
   std::optional<int> begin_index_;
 
-  // 私有工具函数
+  // private tool function
   torch::Tensor convert_to_karras(const torch::Tensor& in_sigmas,
                                   int num_inference_steps) {
     float sigma_min = sigma_min_;
@@ -99,7 +100,8 @@ class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
                                 int num_inference_steps,
                                 float alpha = 0.6f,
                                 float beta = 0.6f) {
-    // 注意：实际使用需要链接scipy的beta分布实现，此处仅为框架示意
+    // NOTE: Actual usage requires the `beta distribution` implementation from
+    // scipy, this is just for illustration.
     throw std::runtime_error(
         "Beta sigmas implementation requires scipy integration");
   }
@@ -137,7 +139,7 @@ class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
   }
 
  public:
-  int64_t order = 1;  // 默认阶数为1
+  int64_t order = 1;  // default value is 1
   ModelArgs args;
   int base_image_seq_len() { return base_image_seq_len_.value(); }
   int max_image_seq_len() { return max_image_seq_len_.value(); }
@@ -400,27 +402,32 @@ class FlowMatchEulerDiscreteSchedulerImpl : public torch::nn::Module {
                         const torch::Tensor& positions,
                         std::vector<KVCache>& kv_caches,
                         const ModelInputParams& input_params) {
-    // 1. 测试参数（可通过input_params传入，或硬编码用于调试）
+    // 1. Test params (can be passed in via input_params, or hard-coded for
+    // debugging purposes.)
     const int num_inference_steps = 50;
-    const float mu = 0.5f;              // 动态偏移参数
-    const bool use_stochastic = false;  // 先测试确定性模式
+    const float mu = 0.5f;              // Dynamic offset parameter
+    const bool use_stochastic = false;  // Test the deterministic mode first.
 
-    // 2. 配置调度器
+    // 2. config the scheduler
     this->set_timesteps(
         num_inference_steps, tokens.device(), /*sigmas=*/std::nullopt, mu);
     this->set_begin_index(0);
 
-    // 3. 生成测试输入（与Python端保持一致的随机种子）
-    torch::manual_seed(42);  // 固定随机种子，确保结果可复现
+    // 3. Generate test inputs (with fixed random seed to ensure
+    // reproducibility)
+    torch::manual_seed(42);  // Fixed random seed for reproducibility
     torch::Tensor sample = torch::randn(
-        {1, 3, 32, 32}, torch::dtype(torch::kFloat32));      // 模拟样本
-    torch::Tensor model_output = torch::randn_like(sample);  // 模拟模型输出
-    torch::Tensor timestep = this->timesteps()[0];           // 初始时间步
-    model_output = model_output.to(timestep.device())
-                       .to(torch::kFloat32);  // 确保与sample同设备和dtype
-    sample = sample.to(timestep.device())
-                 .to(torch::kFloat32);  // 确保与timestep同设备和dtype
-    // 4. 执行一步调度器计算
+        {1, 3, 32, 32}, torch::dtype(torch::kFloat32));  // Mock sample
+    torch::Tensor model_output =
+        torch::randn_like(sample);                  // Mock model output
+    torch::Tensor timestep = this->timesteps()[0];  // Initial timestep
+    model_output =
+        model_output.to(timestep.device())
+            .to(torch::kFloat32);  // Ensure same device and dtype as sample
+    sample =
+        sample.to(timestep.device())
+            .to(torch::kFloat32);  // Ensure same device and dtype as timestep
+    // 4. Execute one step of the scheduler calculation
     auto output = this->step(model_output,
                              timestep,
                              sample,

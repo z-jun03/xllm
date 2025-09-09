@@ -1050,7 +1050,8 @@ class UNetMidBlock2DImpl : public torch::nn::Module {
             true                 // _from_deprecated_attn_block
             ));
       } else {
-        attentions_->push_back(torch::nn::Sequential());  // 占位空模块
+        // Add an empty module as a placeholder.
+        attentions_->push_back(torch::nn::Sequential());
       }
       resnets_->push_back(ResnetBlock2D(
           in_channels,
