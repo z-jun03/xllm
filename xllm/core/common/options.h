@@ -140,6 +140,20 @@ class Options {
   PROPERTY(std::string, store_master_server_entry) = "";
 
   PROPERTY(std::string, store_metadata_connstring) = "";
+
+  PROPERTY(bool, enable_profile_step_time) = false;
+
+  PROPERTY(bool, enable_profile_token_budget) = false;
+
+  PROPERTY(bool, enable_latency_aware_schedule) = false;
+  // the max prompt length for profile
+  PROPERTY(int32_t, profile_max_prompt_length) = 2048;
+  // true if generate kv cache for profile
+  PROPERTY(bool, enable_profile_kv_blocks) = true;
+  // all requests use single global ttft
+  PROPERTY(int32_t, max_global_ttft_ms) = std::numeric_limits<int32_t>::max();
+  // all requests use single global tpot
+  PROPERTY(int32_t, max_global_tpot_ms) = std::numeric_limits<int32_t>::max();
 };
 
 }  // namespace xllm

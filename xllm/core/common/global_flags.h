@@ -158,3 +158,17 @@ DECLARE_string(store_protocol);
 DECLARE_string(store_master_server_entry);
 
 DECLARE_string(store_metadata_connstring);
+
+DECLARE_bool(enable_profile_step_time);
+
+DECLARE_bool(enable_profile_token_budget);
+
+DECLARE_bool(enable_latency_aware_schedule);
+
+DECLARE_int32(profile_max_prompt_length);
+
+DECLARE_bool(enable_profile_kv_blocks);
+
+DECLARE_int32(max_global_ttft_ms);
+
+DECLARE_int32(max_global_tpot_ms);
