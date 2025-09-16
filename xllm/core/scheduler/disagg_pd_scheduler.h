@@ -137,16 +137,14 @@ class DisaggPDScheduler : public ContinuousScheduler {
                           std::vector<std::shared_ptr<Request>>,
                           std::function<bool(const std::shared_ptr<Request>&,
                                              const std::shared_ptr<Request>&)>>;
-  RequestPriorityQueue waiting_priority_queue_;
-  RequestPriorityQueue waiting_priority_queue_offline_;
 
   // use threadpool to handle prefill-completed request
   ThreadPool prefill_threadpool_;
 
   // use threadpool to handle all RequestOuputs queue
-  static constexpr size_t kOutputTheadNum_ = 128;  // magic num
-  size_t next_thread_idx = 0;
-  ThreadPool output_threadpools_[kOutputTheadNum_];
+  static constexpr size_t kOutputThreadNum_ = 128;  // magic num
+  size_t next_thread_idx_ = 0;
+  ThreadPool output_threadpools_[kOutputThreadNum_];
   // keep the thread to handle request output
   // A request will be handled in the same thread to guarantee the token's
   // order.
@@ -172,7 +170,7 @@ class DisaggPDScheduler : public ContinuousScheduler {
   // thread.
   std::unordered_map<proto::DisaggPDService_Stub*, size_t>
       remote_prefill_thread_map_;
-  size_t next_prefill_thread_idx = 0;
+  size_t next_prefill_thread_idx_ = 0;
 
   // Lock for multi-threaded read-write latency metrics
   std::vector<int64_t> recent_ttft_;

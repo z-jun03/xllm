@@ -30,21 +30,19 @@ class DisaggPDServiceImplInterface {
   virtual ~DisaggPDServiceImplInterface() = default;
 
   virtual void decode_recv_new_requests(const proto::DisaggRequests* request,
-                                        proto::DisaggResponses* response) {}
+                                        proto::DisaggResponses* response) = 0;
 
   virtual void decode_recv_first_generation(
       const proto::DisaggGenerations* request,
-      proto::Status* response) {}
+      proto::Status* response) = 0;
 
   virtual bool prefill_recv_generation(
       const proto::DisaggStreamGeneration* request,
-      proto::Status* response) {
-    return true;
-  }
+      proto::Status* response) = 0;
 
   virtual void prefill_recv_generations(
       const proto::DisaggStreamGenerations* requests,
-      proto::StatusSet* responses) {}
+      proto::StatusSet* responses) = 0;
 };
 
 class DisaggPDServiceImpl final : public DisaggPDServiceImplInterface {

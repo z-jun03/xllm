@@ -414,8 +414,8 @@ void DisaggPDScheduler::prefill_send_first_generation() {
         }
         remote_requests_map_[request->request_id()] = request;
         remote_requests_output_thread_map_[request->request_id()] =
-            next_thread_idx;
-        next_thread_idx = (++next_thread_idx) % kOutputTheadNum_;
+            next_thread_idx_;
+        next_thread_idx_ = (++next_thread_idx_) % kOutputThreadNum_;
         requests.emplace_back(request);
 
         running_requests_[i] = nullptr;
@@ -588,8 +588,8 @@ bool DisaggPDScheduler::decode_schedule(
     }
     received_request_map_[request->request_id()] = request;
     received_request_output_thread_map_[request->request_id()] =
-        next_thread_idx;
-    next_thread_idx = (++next_thread_idx) % kOutputTheadNum_;
+        next_thread_idx_;
+    next_thread_idx_ = (++next_thread_idx_) % kOutputThreadNum_;
   }
 
   {
@@ -598,8 +598,9 @@ bool DisaggPDScheduler::decode_schedule(
     // allocate response thread to prefill instance stub.
     if (remote_prefill_thread_map_.find(stub) ==
         remote_prefill_thread_map_.end()) {
-      remote_prefill_thread_map_[stub] = next_prefill_thread_idx;
-      next_prefill_thread_idx = (++next_prefill_thread_idx) % kOutputTheadNum_;
+      remote_prefill_thread_map_[stub] = next_prefill_thread_idx_;
+      next_prefill_thread_idx_ =
+          (++next_prefill_thread_idx_) % kOutputThreadNum_;
     }
   }
 
