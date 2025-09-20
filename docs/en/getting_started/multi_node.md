@@ -42,7 +42,6 @@ LOG_DIR="log"                                      # Log directory
 NNODES=2                                           # Number of nodes (this script starts 2 processes)
 
 export HCCL_IF_BASE_PORT=43432  # HCCL communication base port
-export FOLLY_DEBUG_MEMORYIDLER_DISABLE_UNMAP=1  # Disable memory release (improves stability)
 
 for (( i=0; i<$NNODES; i++ ))
 do

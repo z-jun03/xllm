@@ -40,7 +40,6 @@ LOG_DIR="log"                                      # 日志目录
 NNODES=2                                           # 节点数（当前脚本启动 2 个进程）
 
 export HCCL_IF_BASE_PORT=43432  # HCCL 通信基础端口
-export FOLLY_DEBUG_MEMORYIDLER_DISABLE_UNMAP=1  # 禁用内存释放（提升稳定性）
 
 for (( i=0; i<$NNODES; i++ ))
 do
