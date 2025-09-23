@@ -185,6 +185,8 @@ void proto_to_forward_input(const proto::ForwardInput* pb_forward_input,
   input_params.global_empty_kv_cache =
       pb_forward_input->global_empty_kv_cache();
   input_params.num_sequences = block_tables_vec.size();
+  assert(input_params.num_sequences == pb_forward_input->num_sequences());
+  input_params.prefill_seq_len = pb_forward_input->prefill_seq_len();
   input_params.kv_max_seq_len = pb_forward_input->max_seq_len();
   input_params.q_max_seq_len = pb_forward_input->q_max_seq_len();
   input_params.kv_seq_lens = torch::tensor(seq_lens, tensor_options);
