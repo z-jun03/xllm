@@ -22,6 +22,7 @@ limitations under the License.
 
 #include "dit_executor.h"
 #include "framework/dit_model_context.h"
+#include "framework/ditcache/cache_agent.h"
 #include "options.h"
 #include "util/threadpool.h"
 
@@ -64,6 +65,8 @@ class DiTWorker {
   ParallelArgs parallel_args_;
 
   ThreadPool threadpool_;
+
+  CacheConfig cache_config_;
 };
 
 }  // namespace xllm
