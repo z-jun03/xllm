@@ -278,7 +278,7 @@ ForwardOutput VLMEngine::step(std::vector<Batch>& batches) {
   for (auto& worker : workers_) {
     // TODO to adapt multi stream parallel later
     BatchedForwardInputs batched_fwd_inputs;
-    batched_fwd_inputs.micro_inputs = {std::move(forward_inputs)};
+    batched_fwd_inputs.micro_inputs = {forward_inputs};
     futures.emplace_back(worker->step_async(batched_fwd_inputs));
   }
   // wait for the all future to complete
