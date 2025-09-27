@@ -21,6 +21,7 @@ limitations under the License.
 #include <thread>
 
 #include "dit_executor.h"
+#include "framework/dit_cache/dit_cache_agent.h"
 #include "framework/dit_model_context.h"
 #include "options.h"
 #include "util/threadpool.h"

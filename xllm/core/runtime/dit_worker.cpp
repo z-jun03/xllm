@@ -81,6 +81,31 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   dit_model_executor_ =
       std::make_unique<DiTExecutor>(dit_model_.get(), options_);
 
+  DiTCacheConfig cache_config_;
+
+  // FBCACHE
+   cache_config_.selected_policy = PolicyType::FBCACHE;
+   cache_config_.fbcache.num_inference_steps = 25;
+   cache_config_.fbcache.residual_diff_threshold = 0.09;
+   cache_config_.fbcache.warmup_steps = 0;
+
+  // TAYLORSEER
+  // cache_config_.selected_policy = PolicyType::TAYLORSEER;
+  // cache_config_.taylorseer.n_derivatives = 3;
+  // cache_config_.taylorseer.skip_interval_steps = 3;
+  // cache_config_.taylorseer.num_inference_steps = 25;
+  // cache_config_.taylorseer.warmup_steps = 0;
+
+  // FBCACHE_WITH_TAYLORSEER
+  //  cache_config_.selected_policy = PolicyType::FBCACHE_WITH_TAYLORSEER;
+  //  cache_config_.fbcachewithtaylor.residual_diff_threshold = 0.09;
+  //  cache_config_.fbcachewithtaylor.n_derivatives = 3;
+  //  cache_config_.fbcachewithtaylor.num_inference_steps = 25;
+  //  cache_config_.fbcachewithtaylor.warmup_steps = 0;
+
+  bool success = DiTCacheAgent::getinstance().init(cache_config_);
+  CHECK(success) << "Cache init failed";
+
   return true;
 }
 

@@ -51,6 +51,7 @@ cc_library(
   DEPS
     torch
     $<$<BOOL:${USE_NPU}>:torch_npu>
+    :dit_cache
     :common
     :model_context
     :request
