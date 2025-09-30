@@ -9,6 +9,7 @@ cc_library(
   dit_cache_data.h
   dit_cache_config.h
   dit_cache.h
+  dit_none_cache.h
   fbcache.h
   fbcachewithtaylor.h
   taylorseer.h

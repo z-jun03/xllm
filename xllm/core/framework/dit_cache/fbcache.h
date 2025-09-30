@@ -1,6 +1,4 @@
 #pragma once
-#include <glog/logging.h>
-
 #include "dit_cache_impl.h"
 #include "taylorseer.h"
 
