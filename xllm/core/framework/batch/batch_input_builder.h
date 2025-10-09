@@ -37,8 +37,11 @@ class BatchInputBuilder {
       const std::vector<uint32_t>& allowed_max_tokens,
       const std::vector<torch::Tensor>& input_embeddings_vec,
       const std::vector<MMData>& mm_data_vec,
+      // for global kv cache copy block from host to device
       const std::vector<CacheBlockInfo>* copy_in_cache_block_infos,
+      // for global kv cache copy block from device to host
       const std::vector<CacheBlockInfo>* copy_out_cache_block_infos,
+      // for beam-search
       std::vector<CacheBlockInfo>* swap_cache_block_infos,
       const ModelArgs* args,
       ThreadPool* thread_pool = nullptr);
@@ -151,7 +154,7 @@ class BatchInputBuilder {
   const std::vector<CacheBlockInfo>* copy_out_cache_block_infos_ = nullptr;
   std::vector<CacheBlockInfo>* swap_cache_block_infos_ = nullptr;
 
-  // thread pool for multithreaded processing
+  // thread pool for multithreaded processing, not owned
   ThreadPool* thread_pool_ = nullptr;
 };
 

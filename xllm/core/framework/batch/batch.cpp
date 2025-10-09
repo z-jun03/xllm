@@ -97,7 +97,7 @@ RawForwardInput Batch::prepare_forward_input(uint32_t start_idx,
 }
 
 void Batch::process_sample_output(const RawForwardOutput& raw_output,
-                                  bool enable_schedule_overlap) {
+                                  bool replace_fake_token) {
   // if raw_output.outputs.size() value is 0,
   // this means all sequences are in prefill stage status.
   const int64_t num_seqs = raw_output.outputs.size();
@@ -107,7 +107,7 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
       output_idx++;
       continue;
     }
-    if (update_sequence_state(seq, enable_schedule_overlap)) {
+    if (update_sequence_state(seq, replace_fake_token)) {
       continue;
     }
     CHECK_LT(output_idx, num_seqs);
@@ -123,7 +123,7 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
       t.top_tokens = raw_sam_output.tokens[t_idx].top_tokens;
       t.top_logprobs = raw_sam_output.tokens[t_idx].top_logprobs;
       // always append a token, maybe true or fake token
-      append_token_for_sequence(seq, t, t_idx, enable_schedule_overlap);
+      append_token_for_sequence(seq, t, t_idx, replace_fake_token);
 
       if (raw_sam_output.tokens[t_idx].embeddings.size() > 0) {
         torch::Tensor embeddings =
@@ -138,11 +138,14 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
     }
   }
   CHECK_EQ(output_idx, num_seqs);
-  process_beam_search();
+
+  if (!FLAGS_enable_schedule_overlap || replace_fake_token) {
+    process_beam_search();
+  }
 }
 
 void Batch::process_sample_output(const SampleOutput& sample_output,
-                                  bool enable_schedule_overlap) {
+                                  bool replace_fake_token) {
   if (sample_output.embeddings.defined()) {
     const int64_t num_seqs = sample_output.embeddings.size(0);
     int64_t output_idx = 0;
@@ -164,7 +167,7 @@ void Batch::process_sample_output(const SampleOutput& sample_output,
       output_idx++;
       continue;
     }
-    if (update_sequence_state(seq, enable_schedule_overlap)) {
+    if (update_sequence_state(seq, replace_fake_token)) {
       continue;
     }
     CHECK_LT(output_idx, num_seqs);
@@ -177,25 +180,28 @@ void Batch::process_sample_output(const SampleOutput& sample_output,
                                    sample_output.top_logprobs);
 
     // always append a token, maybe true or fake token
-    append_token_for_sequence(seq, token, 0, enable_schedule_overlap);
+    append_token_for_sequence(seq, token, 0, replace_fake_token);
   }
   CHECK_EQ(output_idx, num_seqs);
-  process_beam_search();
+
+  if (!FLAGS_enable_schedule_overlap || replace_fake_token) {
+    process_beam_search();
+  }
 }
 
-bool Batch::update_sequence_state(Sequence* seq, bool enable_schedule_overlap) {
+bool Batch::update_sequence_state(Sequence* seq, bool replace_fake_token) {
   // In chunked prefill case, if enable_schedule_overlap, we need the
   // prefill-or-not state of last stage, otherwise, we need the state
   // of current stage.
   if (FLAGS_enable_chunked_prefill) {
-    if (!enable_schedule_overlap && seq->is_prefill_stage()) {
+    if (!replace_fake_token && seq->is_prefill_stage()) {
       seq->pre_scheduled_step_prefill_queue().push(true);
-      // if not enable_schedule_overlap, pop out here to avoid endless growth
+      // if not replace_fake_token, pop out here to avoid endless growth
       if (seq->pre_scheduled_step_prefill_queue().size() > 2) {
         seq->pre_scheduled_step_prefill_queue().pop();
       }
       return true;
-    } else if (enable_schedule_overlap &&
+    } else if (replace_fake_token &&
                seq->pre_scheduled_step_prefill_queue().front()) {
       seq->pre_scheduled_step_prefill_queue().pop();
       return true;
@@ -207,19 +213,19 @@ bool Batch::update_sequence_state(Sequence* seq, bool enable_schedule_overlap) {
 void Batch::append_token_for_sequence(Sequence* seq,
                                       const Token& token,
                                       int token_idx,
-                                      bool enable_schedule_overlap) {
+                                      bool replace_fake_token) {
   // always append a token, maybe true or fake token
-  if (!enable_schedule_overlap) {
+  if (!replace_fake_token) {
     seq->append_token(token);
     if (FLAGS_enable_chunked_prefill) {
       seq->pre_scheduled_step_prefill_queue().push(false);
-      // if not enable_schedule_overlap, pop out here to avoid endless growth
+      // if not replace_fake_token, pop out here to avoid endless growth
       if (seq->pre_scheduled_step_prefill_queue().size() > 2) {
         seq->pre_scheduled_step_prefill_queue().pop();
       }
     }
   } else {
-    // truely update the real token if enable_schedule_overlap
+    // truely update the real token if replace_fake_token
     seq->update_last_step_token(token, token_idx);
     if (FLAGS_enable_chunked_prefill && token_idx == 0) {
       seq->pre_scheduled_step_prefill_queue().pop();

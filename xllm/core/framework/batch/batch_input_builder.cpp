@@ -41,12 +41,12 @@ void split_copy_out_blocks(RawForwardInput& raw_forward_input,
                            std::unordered_set<int32_t>& write_block_ids) {
   std::vector<CacheBlockInfo> async_copy_out_blocks;
   std::vector<CacheBlockInfo> sync_copy_out_blocks;
-  for (CacheBlockInfo content : raw_forward_input.copy_out_blocks) {
+  for (CacheBlockInfo& content : raw_forward_input.copy_out_blocks) {
     if (write_block_ids.find(content.device_block_id) !=
         write_block_ids.end()) {
-      sync_copy_out_blocks.push_back(content);
+      sync_copy_out_blocks.emplace_back(std::move(content));
     } else {
-      async_copy_out_blocks.push_back(content);
+      async_copy_out_blocks.emplace_back(std::move(content));
     }
   }
   raw_forward_input.copy_out_blocks = std::move(sync_copy_out_blocks);

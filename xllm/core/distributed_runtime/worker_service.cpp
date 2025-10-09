@@ -203,8 +203,8 @@ void WorkerService::AllocateContinuousKVCache(
     value_options.max_seqs_per_batch() =
         request->value_options().max_seqs_per_batch();
     std::vector<XTensor::Options> options_vec;
-    options_vec.emplace_back(key_options);
-    options_vec.emplace_back(value_options);
+    options_vec.emplace_back(std::move(key_options));
+    options_vec.emplace_back(std::move(value_options));
 
     auto future = worker_->allocate_continuous_kv_cache_async(options_vec);
     bool status = std::move(future).get();

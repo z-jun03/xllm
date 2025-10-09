@@ -46,7 +46,7 @@ class Batch {
 
   void add(SequencesGroup* sequence_group) {
     sequence_groups_.push_back(sequence_group);
-  };
+  }
 
   void set_copy_in_cache_block_infos(
       std::vector<CacheBlockInfo>* copy_in_cache_block_infos) {
@@ -80,11 +80,19 @@ class Batch {
                                         ThreadPool* thread_pool = nullptr);
 
   // process output
+  //
+  // replace_fake_token:
+  // In the scenario where enable_schedule_overlap is true,
+  // the forward is divided into two stages.
+  // The first stage populates the sequence with a fake token,
+  // and the second stage replaces the previous fake token with a real token.
+  // The boolean parameter `replace_fake_token` indicates
+  // whether the current stage is the second stage.
   void process_sample_output(const SampleOutput& sample_output,
-                             bool enable_schedule_overlap);
+                             bool replace_fake_token);
 
   void process_sample_output(const RawForwardOutput& raw_output,
-                             bool enable_schedule_overlap);
+                             bool replace_fake_token);
 
   // process the accepted output embedding
   void process_embedding_output(const torch::Tensor& embedding);
@@ -100,12 +108,12 @@ class Batch {
   bool get_batch_prefill_status() const { return all_seqs_in_prefill_; }
 
  private:
-  bool update_sequence_state(Sequence* seq, bool enable_schedule_overlap);
+  bool update_sequence_state(Sequence* seq, bool replace_fake_token);
 
   void append_token_for_sequence(Sequence* seq,
                                  const Token& token,
                                  int token_idx,
-                                 bool enable_schedule_overlap);
+                                 bool replace_fake_token);
 
   void process_beam_search();
 
