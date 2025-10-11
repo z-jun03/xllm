@@ -31,9 +31,6 @@ ForwardInput BaseExecutorImpl::prepare_inputs(Batch& batch) {
   return batch.prepare_forward_input(options_.num_decoding_tokens(), 0, args_);
 }
 
-// tokens: [num_tokens]
-// positions: [num_tokens] token pos in the sequence
-// returns: [num_tokens, hidden_size]
 torch::Tensor BaseExecutorImpl::run(
     const std::vector<torch::Tensor>& tokens,
     const std::vector<torch::Tensor>& positions,

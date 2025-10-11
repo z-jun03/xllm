@@ -43,9 +43,6 @@ Block::Block(const Block& other)
       manager_(other.manager_) {
   memcpy(hash_value_, other.hash_value_, MURMUR_HASH3_VALUE_LEN);
 
-  token_ids_.reserve(other.token_ids_.size());
-  token_ids_.assign(other.token_ids_.begin(), other.token_ids_.end());
-
   // increase reference count
   inc_ref_count();
 }
@@ -62,9 +59,6 @@ Block& Block::operator=(const Block& other) {
 
     memcpy(hash_value_, other.hash_value_, MURMUR_HASH3_VALUE_LEN);
 
-    token_ids_.reserve(other.token_ids_.size());
-    token_ids_.assign(other.token_ids_.begin(), other.token_ids_.end());
-
     inc_ref_count();
   }
   return *this;
@@ -76,7 +70,6 @@ Block::Block(Block&& other) noexcept
       ref_count_(other.ref_count_),
       manager_(other.manager_) {
   memcpy(hash_value_, other.hash_value_, MURMUR_HASH3_VALUE_LEN);
-  token_ids_.swap(other.token_ids_);
 
   // reset other without adjusting the reference count
   other.id_ = -1;
@@ -95,7 +88,6 @@ Block& Block::operator=(Block&& other) noexcept {
     ref_count_ = other.ref_count_;
 
     memcpy(hash_value_, other.hash_value_, MURMUR_HASH3_VALUE_LEN);
-    token_ids_.swap(other.token_ids_);
 
     other.id_ = -1;
     other.size_ = 0;
@@ -120,8 +112,6 @@ void Block::dec_ref_count() {
     if (manager_ != nullptr) {
       manager_->free(id_);
     }
-
-    token_ids_.clear();
   }
 }
 

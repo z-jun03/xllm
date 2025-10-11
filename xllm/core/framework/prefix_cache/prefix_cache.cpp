@@ -170,7 +170,6 @@ size_t PrefixCache::insert(const Slice<int32_t>& token_ids,
       Node* new_node = new Node();
 
       new_node->block = blocks[block_idx];
-      new_node->block.set_token_ids(token_ids.slice(i, i + block_size_));
       new_node->last_access_time = now;
 
       node_list.push_front(new_node);

@@ -42,11 +42,19 @@ class Engine {
 
   // return the block manager
   virtual BlockManagerPool* block_manager_pool() const {
-    return block_manager_pool_.get();
+    auto p = reinterpret_cast<BlockManagerPool*>(kv_cache_manager_.get());
+    if (!p) {
+      LOG(FATAL) << "kv_cache_manager_ is not BlockManagerPool type!";
+    }
+    return p;
   }
 
   virtual XTensorManagerPool* xtensor_manager_pool() const {
-    return xtensor_manager_pool_.get();
+    auto p = reinterpret_cast<XTensorManagerPool*>(kv_cache_manager_.get());
+    if (!p) {
+      LOG(FATAL) << "kv_cache_manager_ is not XTensorManagerPool type!";
+    }
+    return p;
   }
 
   // return the model args
@@ -122,11 +130,9 @@ class Engine {
   // Tokenizer args
   TokenizerArgs tokenizer_args_;
 
-  // block manager
-  std::unique_ptr<BlockManagerPool> block_manager_pool_;
-
-  // xtensor manager
-  std::unique_ptr<XTensorManagerPool> xtensor_manager_pool_;
+  // kv cache manager
+  // support `block manager` and `xtensor manager` currently.
+  std::unique_ptr<KVCacheManager> kv_cache_manager_;
 
   // tokenizer
   std::unique_ptr<Tokenizer> tokenizer_;

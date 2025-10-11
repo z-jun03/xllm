@@ -23,8 +23,6 @@ limitations under the License.
 #if defined(USE_NPU)
 #include <hccl/hccl.h>
 #endif
-#include <sys/sysinfo.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
@@ -45,6 +43,19 @@ limitations under the License.
 #include "util/utils.h"
 
 namespace xllm {
+
+namespace {
+uint32_t determine_micro_batches_num(const std::vector<Batch>& batch) {
+  bool not_all_in_decode =
+      std::any_of(batch.begin(), batch.end(), [](const Batch& one_batch) {
+        return one_batch.get_batch_prefill_status();
+      });
+  if (not_all_in_decode && FLAGS_enable_multi_stream_parallel) {
+    return 2;
+  }
+  return 1;
+}
+}  // namespace
 
 LLMEngine::LLMEngine(const runtime::Options& options,
                      std::shared_ptr<DistManager> dist_manager)
@@ -97,6 +108,13 @@ bool LLMEngine::init() {
     return false;
   }
 
+  if (FLAGS_enable_eplb) {
+    int32_t num_layers = args_.n_layers() - args_.first_k_dense_replace();
+    int32_t num_experts = args_.n_routed_experts();
+    eplb_manager_ = std::make_unique<EplbManager>(
+        num_layers, worker_clients_num_, num_experts);
+  }
+
   auto kv_cache_cap = estimate_kv_cache_capacity();
 
   if (!(FLAGS_enable_continuous_kvcache
@@ -130,12 +148,6 @@ bool LLMEngine::init_model() {
   n_local_q_heads_ = std::max<int64_t>(1, n_heads / world_size);
   head_dim_ = args_.head_dim();
   dtype_ = util::parse_dtype(args_.dtype(), options_.devices()[0]);
-  if (FLAGS_enable_eplb) {
-    int32_t num_layers = args_.n_layers() - args_.first_k_dense_replace();
-    int32_t num_experts = args_.n_routed_experts();
-    eplb_manager_ = std::make_unique<EplbManager>(
-        num_layers, worker_clients_num_, num_experts);
-  }
 
   // key + value for all layers
   LOG(INFO) << "Block info, block_size: " << options_.block_size()
@@ -304,7 +316,7 @@ bool LLMEngine::allocate_kv_cache(const Engine::KVCacheCapacity& kv_cache_cap) {
       .enable_disagg_pd(options_.enable_disagg_pd())
       .enable_cache_upload(options_.enable_cache_upload())
       .enable_kvcache_store(options_.enable_kvcache_store());
-  block_manager_pool_ = std::make_unique<BlockManagerPool>(options, dp_size_);
+  kv_cache_manager_ = std::make_unique<BlockManagerPool>(options, dp_size_);
 
   // init kv cache for each worker in parallel
   std::vector<folly::SemiFuture<bool>> futures;
@@ -397,7 +409,7 @@ bool LLMEngine::allocate_continuous_kv_cache(
       .num_total_pages(kv_cache_cap.n_pages)
       .num_layers(args_.n_layers())
       .cache_size_per_token(cache_size_per_token);
-  xtensor_manager_pool_ = std::make_unique<XTensorManagerPool>(
+  kv_cache_manager_ = std::make_unique<XTensorManagerPool>(
       xtensor_manager_options, options_.dp_size());
 
   return true;
@@ -460,16 +472,22 @@ LLMEngine::load_kv_blocks_from_store_async(
 
 void LLMEngine::get_device_info(std::vector<std::string>& device_ips,
                                 std::vector<uint16_t>& ports) {
-  device_ips.reserve(worker_clients_num_);
-  ports.reserve(worker_clients_num_);
-  for (size_t worker_rank = 0; worker_rank < worker_clients_num_;
-       ++worker_rank) {
-    std::string device_ip;
-    uint16_t port;
-    worker_clients_[worker_rank]->get_device_info(device_ip, port);
-    device_ips.emplace_back(std::move(device_ip));
-    ports.emplace_back(port);
+  if (worker_device_ips_.size() != worker_clients_num_ ||
+      worker_ports_.size() != worker_clients_num_) {
+    worker_device_ips_.reserve(worker_clients_num_);
+    worker_ports_.reserve(worker_clients_num_);
+    for (size_t worker_rank = 0; worker_rank < worker_clients_num_;
+         ++worker_rank) {
+      std::string device_ip;
+      uint16_t port;
+      worker_clients_[worker_rank]->get_device_info(device_ip, port);
+      worker_device_ips_.emplace_back(std::move(device_ip));
+      worker_ports_.emplace_back(port);
+    }
   }
+
+  device_ips = worker_device_ips_;
+  ports = worker_ports_;
 }
 
 void LLMEngine::get_cache_info(std::vector<uint64_t>& cluster_ids,
@@ -589,6 +607,8 @@ ForwardOutput LLMEngine::step(std::vector<Batch>& batch) {
       << " and actual batch size as " << batch.size() << ".";
 
   // prepare input with DP and multi-stream parallel, 2-D micro batches
+  // batched_raw_forward_inputs[dp_size][micro_batch_size]
+  // currently we use two batch overlap(TBO), each micro_batch_size is 2.
   auto batched_raw_forward_inputs = prepare_inputs(batch);
   DCHECK(dp_size_ == batched_raw_forward_inputs.size())
       << "The processed raw forward inputs size "
@@ -611,74 +631,66 @@ ForwardOutput LLMEngine::step(std::vector<Batch>& batch) {
   if (FLAGS_enable_eplb && !options_.enable_schedule_overlap()) {
     process_eplb_data(results);
   }
-  // concat results from dp ranks
-  std::vector<std::optional<RawForwardOutput>> raw_forward_outputs;
-  raw_forward_outputs.reserve(dp_size_);
+
+  assert(dp_size_ == worker_clients_num_ / dp_local_tp_size_);
+  size_t dp_rank = 0;
   for (auto worker_rank = 0; worker_rank < worker_clients_num_;
        worker_rank += dp_local_tp_size_) {
     auto result = results[worker_rank].value();
     if (result.has_value()) {
-      raw_forward_outputs.push_back(result);
+      // set second input param enable_schedule_overlap to false,
+      // if it's not enabled, process_sample_output will append the real token,
+      // if it's enabled, this false here will append the fake token in
+      // process_sample_output
+      batch[dp_rank].process_sample_output(result.value(), false);
     } else {
       throw std::runtime_error("Failed to execute model");
     }
+    ++dp_rank;
   }
 
-  // set second input param enable_schedule_overlap to false,
-  // if it's not enabled, process_sample_output will append the real token,
-  // if it's enabled, this false here will append the fake token in
-  // process_sample_output
-  for (auto dp_rank = 0; dp_rank < dp_size_; ++dp_rank) {
-    batch[dp_rank].process_sample_output(raw_forward_outputs[dp_rank].value(),
-                                         false);
-  }
   COUNTER_ADD(engine_latency_seconds, timer.elapsed_seconds());
   return {};
 }
 
 void LLMEngine::update_last_step_result(std::vector<Batch>& last_batch) {
   std::vector<folly::SemiFuture<std::optional<RawForwardOutput>>> futures;
-  futures.reserve(dp_size_);
+  futures.reserve(worker_clients_num_);
   std::vector<RawForwardOutput> raw_forward_outputs;
   raw_forward_outputs.reserve(dp_size_);
+
+  // NOTE: We only need to get the output from the driver worker,
+  // cause the output on other workers is the same as that on driver.
+  // Under data parallelism (DP), we need to get dp_size outputs.
+  // The `stride` means the workers num we can skip.
+  int stride = dp_local_tp_size_;
+  // If EPLB is enabled, we need to get results from all workers,
+  // because the experts on each worker are different,
+  // and the tokens load of all experts needs to be returned to engine.
+  // so we can not skip any worker.
   if (FLAGS_enable_eplb) {
-    for (auto worker_rank = 0; worker_rank < worker_clients_num_;
-         worker_rank++) {
-      futures.emplace_back(
-          worker_clients_[worker_rank]->get_last_step_result_async());
-    }
-    // wait for the all future to complete
-    auto last_step_results = folly::collectAll(futures).get();
-    // concat last step results from dp ranks
+    stride = 1;
+  }
+
+  for (auto worker_rank = 0; worker_rank < worker_clients_num_;
+       worker_rank += stride) {
+    futures.emplace_back(
+        worker_clients_[worker_rank]->get_last_step_result_async());
+  }
+  // wait for the all future to complete
+  auto last_step_results = folly::collectAll(futures).get();
+
+  if (FLAGS_enable_eplb) {
     process_eplb_data(last_step_results);
-    for (auto worker_rank = 0; worker_rank < worker_clients_num_;
-         worker_rank += dp_local_tp_size_) {
-      auto result = last_step_results[worker_rank].value();
-      if (result.has_value()) {
-        raw_forward_outputs.emplace_back(std::move(result.value()));
-      } else {
-        throw std::runtime_error("Failed to get last step results.");
-      }
-    }
-  } else {
-    for (auto worker_rank = 0; worker_rank < worker_clients_num_;
-         worker_rank += dp_local_tp_size_) {
-      futures.emplace_back(
-          worker_clients_[worker_rank]->get_last_step_result_async());
-    }
+  }
 
-    // wait for the all future to complete
-    auto last_step_results = folly::collectAll(futures).get();
-    // concat last step results from dp ranks
-
-    for (auto worker_rank = 0; worker_rank < worker_clients_num_;
-         worker_rank += dp_local_tp_size_) {
-      auto result = last_step_results[worker_rank / dp_local_tp_size_].value();
-      if (result.has_value()) {
-        raw_forward_outputs.emplace_back(std::move(result.value()));
-      } else {
-        throw std::runtime_error("Failed to get last step results.");
-      }
+  for (auto worker_rank = 0; worker_rank < worker_clients_num_;
+       worker_rank += dp_local_tp_size_) {
+    auto result = last_step_results[worker_rank / stride].value();
+    if (result.has_value()) {
+      raw_forward_outputs.emplace_back(std::move(result.value()));
+    } else {
+      throw std::runtime_error("Failed to get last step results.");
     }
   }
 
@@ -736,18 +748,6 @@ void LLMEngine::process_eplb_data(
   }
   eplb_manager_->set_prepared_layer_ids(layer_ids);
   eplb_manager_->update_expert_load(tensors);
-}
-
-uint32_t determine_micro_batches_num(const std::vector<Batch>& batch) {
-  bool not_all_in_decode =
-      std::any_of(batch.begin(), batch.end(), [](const Batch& one_batch) {
-        return one_batch.get_batch_prefill_status();
-      });
-  if (not_all_in_decode && FLAGS_enable_multi_stream_parallel) {
-    return 2;
-  } else {
-    return 1;
-  }
 }
 
 std::vector<std::vector<RawForwardInput>> LLMEngine::prepare_inputs(

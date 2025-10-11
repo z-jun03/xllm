@@ -55,6 +55,7 @@ ModelContext::ModelContext(const ParallelArgs& input_parallel_args,
 #endif
 }
 
+#if defined(USE_NPU)
 ModelContext::ModelContext(const ParallelArgs& input_parallel_args,
                            const ModelArgs& model_args,
                            const QuantArgs& quant_args,
@@ -65,5 +66,6 @@ ModelContext::ModelContext(const ParallelArgs& input_parallel_args,
       quant_args_(quant_args),
       tensor_options_(tensor_options),
       context_(context) {}
+#endif
 
 }  // namespace xllm

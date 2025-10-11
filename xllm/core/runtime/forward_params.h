@@ -120,8 +120,10 @@ struct ForwardOutput {
   torch::Tensor logits;
   torch::Tensor embedding;
 
+  // for eplb, collect the tokens load of experts on each worker.
   torch::Tensor expert_load_data;
-
+  // for eplb, indicates that the specified layer on the worker
+  // has completed the asynchronous loading of new weight.
   int32_t prepared_layer_id;
 };
 

@@ -57,6 +57,9 @@ class Block final {
   // check if the block is valid
   bool is_valid() const { return id_ >= 0 && ref_count_ != nullptr; }
 
+  // NOTE: Below block `hash_value_` is used for prefix cache and
+  // for recording the hash value of the current block and previous blocks.
+  // hash_value_ = Hash(current_block, Hash(pre_block)).
   const uint8_t* get_immutable_hash_value() const { return hash_value_; }
   uint8_t* get_mutable_hash_value() { return hash_value_; }
 
@@ -65,13 +68,6 @@ class Block final {
   }
 
   uint32_t get_hash_value_len() { return MURMUR_HASH3_VALUE_LEN; }
-
-  void set_token_ids(const Slice<int32_t>& token_ids) {
-    token_ids_.reserve(token_ids.size());
-    token_ids_.assign(token_ids.begin(), token_ids.end());
-  }
-
-  const std::vector<int32_t>& get_token_ids() { return token_ids_; }
 
  private:
   // increase reference count
@@ -93,8 +89,6 @@ class Block final {
   BlockManager* manager_ = nullptr;
 
   uint8_t hash_value_[MURMUR_HASH3_VALUE_LEN];
-
-  std::vector<int32_t> token_ids_;
 };
 
 // equeal operator, mainly used for testing

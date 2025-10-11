@@ -35,6 +35,9 @@ class ExecutorImpl {
 
   virtual ForwardInput prepare_inputs(Batch& batch) = 0;
 
+  // tokens: vector size is dp_size, each element is [num_tokens/dp_size]
+  // positions: vector size is dp_size, each element is [num_tokens/dp_size]
+  // token pos in the sequence returns: [num_tokens, hidden_size]
   virtual torch::Tensor run(const std::vector<torch::Tensor>& tokens,
                             const std::vector<torch::Tensor>& positions,
                             std::vector<KVCache>& kv_caches,

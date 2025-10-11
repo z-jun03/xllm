@@ -36,11 +36,13 @@ class ModelContext {
                const QuantArgs& quant_args,
                const torch::TensorOptions& tensor_options);
 
+#if defined(USE_NPU)
   ModelContext(const ParallelArgs& input_parallel_args,
                const ModelArgs& model_args,
                const QuantArgs& quant_args,
                const torch::TensorOptions& tensor_options,
                atb::Context* context);
+#endif
 
   const ModelArgs& get_model_args() const { return model_args_; }
 
@@ -52,7 +54,9 @@ class ModelContext {
     return tensor_options_;
   }
 
+#if defined(USE_NPU)
   const atb::Context* get_atb_context() const { return context_; }
+#endif
 
   void set_image_embedding_mode(bool image_embedding_mode) {
     model_args_.image_embedding_mode() = image_embedding_mode;

@@ -17,8 +17,12 @@ limitations under the License.
 #pragma once
 
 #include <gflags/gflags.h>
+#include <sys/sysinfo.h>
+#include <unistd.h>
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "common/macros.h"
 #include "distributed_runtime/dist_manager.h"
@@ -93,9 +97,6 @@ class LLMEngine : public Engine {
 
   std::shared_ptr<DistManager> get_dist_manager() { return dist_manager_; };
 
-  std::vector<std::vector<RawForwardInput>> prepare_inputs(
-      std::vector<Batch>& batch);
-
  private:
   friend class SpeculativeEngine;
   // setup workers internal
@@ -105,6 +106,8 @@ class LLMEngine : public Engine {
   bool allocate_kv_cache(const Engine::KVCacheCapacity& kv_cache_cap);
   bool allocate_continuous_kv_cache(
       const Engine::KVCacheCapacity& kv_cache_cap);
+  std::vector<std::vector<RawForwardInput>> prepare_inputs(
+      std::vector<Batch>& batch);
 
  protected:
   // options
@@ -132,7 +135,6 @@ class LLMEngine : public Engine {
   uint32_t worker_clients_num_;
   uint32_t dp_local_tp_size_;
 
-  torch::Tensor expert_load_data_;
   // For multi-node serving
   // engine brpc server, all workers connect to engine_server_,
   // engine_server_ will send a UniqueId for workers to
@@ -141,11 +143,20 @@ class LLMEngine : public Engine {
   // Engine call workers to step via these WorkerClients.
   std::shared_ptr<DistManager> dist_manager_ = nullptr;
 
+  torch::Tensor expert_load_data_;
   std::unique_ptr<EplbManager> eplb_manager_ = nullptr;
   void process_eplb_data(
       const std::vector<folly::Try<std::optional<RawForwardOutput>>>& results);
 
+  // threadpool for handle forward_input in parallel.
+  // Since the batch is created in every step,
+  // the thread_pool is placed inside the engine so as to
+  // avoid creating a new thread pool for each batch.
+  // NOTE: Perhaps it can be optimized to create a global thread pool.
   std::unique_ptr<ThreadPool> threadpool_ = nullptr;
+
+  std::vector<std::string> worker_device_ips_;
+  std::vector<uint16_t> worker_ports_;
 };
 
 }  // namespace xllm

@@ -239,7 +239,7 @@ bool VLMEngine::allocate_kv_cache(const Engine::KVCacheCapacity& kv_cache_cap) {
       .enable_prefix_cache(options_.enable_prefix_cache())
       .enable_disagg_pd(options_.enable_disagg_pd())
       .enable_cache_upload(options_.enable_cache_upload());
-  block_manager_pool_ = std::make_unique<BlockManagerPool>(options);
+  kv_cache_manager_ = std::make_unique<BlockManagerPool>(options);
 
   // init kv cache for each worker in parallel
   std::vector<folly::SemiFuture<bool>> futures;
