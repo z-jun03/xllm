@@ -48,6 +48,11 @@ cc_test(
     absl::synchronization
     absl::time
     GTest::gtest_main
+    xllm_kernels
+    ascendcl
+    atb
+    c_sec
+    spdlog::spdlog
 )
 
 cc_library(

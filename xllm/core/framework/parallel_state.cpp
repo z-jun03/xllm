@@ -23,8 +23,11 @@ limitations under the License.
 #include <torch_npu/csrc/core/npu/NPUStream.h>
 
 #include "hccl/hccl.h"
+#include "xllm_kernels/core/include/atb_speed/base/external_comm_manager.h"
+#include "xllm_kernels/core/include/atb_speed/utils/singleton.h"
 #endif
 #pragma GCC diagnostic pop
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <torch/torch.h>
 
@@ -32,6 +35,7 @@ limitations under the License.
 #include <torch/csrc/distributed/c10d/Types.hpp>
 #include <vector>
 
+#include "common/global_flags.h"
 #include "core/framework/model/model_args.h"
 
 namespace xllm {
@@ -255,4 +259,75 @@ void ProcessGroupHCCL::allgather(torch::Tensor input,
   // }
 }
 #endif
+
+CollectiveCommunicator::CollectiveCommunicator(int global_rank,
+                                               int world_size,
+                                               int dp_size,
+                                               int ep_size) {
+#if defined(USE_NPU)
+  // create hccl process group with hccl_root_info
+  // std::vector<HcclRootInfo> unique_ids;
+  // for (const auto& protoId : uids.comm_unique_ids()) {
+  //   HcclRootInfo id;
+  //   std::memcpy(
+  //       id.internal, protoId.comm_unique_id().data(), sizeof(id.internal));
+  //   unique_ids.push_back(id);
+  // }
+  // HcclComm comm;
+  // auto hccl_result = HcclCommInitRootInfo(
+  //     world_size, &unique_ids[0], global_rank, &comm);
+  // CHECK(hccl_result == HCCL_SUCCESS)
+  //     << "HcclCommInitRootInfo failed, global rank is " <<
+  //     global_rank;
+  // std::unique_ptr<ProcessGroupHCCL> hccl_pg =
+  //     std::make_unique<ProcessGroupHCCL>(
+  //         global_rank, world_size, device, comm);
+
+  // comunicator will be inited in atb.
+  MappingNPU::Options mapping_options;
+  mapping_options.dp_size(dp_size)
+      .tp_size(world_size / dp_size)
+      .moe_tp_size(world_size / ep_size)
+      .moe_ep_size(ep_size)
+      .pp_size(1)
+      .sp_size(1);
+  MappingNPU mapping_npu(
+      FLAGS_rank_tablefile, world_size, global_rank, mapping_options);
+  auto mapping_data = mapping_npu.to_json();
+  atb_speed::base::Mapping mapping;
+  mapping.ParseParam(mapping_data);
+  mapping.InitGlobalCommDomain(FLAGS_communication_backend);
+  auto moeEpParallelInfo = mapping.Get(atb_speed::base::MOE_EP);
+  auto dispatchAndCombinecommDomain =
+      atb_speed::GetSingleton<atb_speed::ExternalCommManager>().GetCommDomain(
+          moeEpParallelInfo.groupId,
+          moeEpParallelInfo.rankIds,
+          moeEpParallelInfo.rank,
+          FLAGS_communication_backend,
+          moeEpParallelInfo.bufferSize,
+          false);
+  auto dispatchAndCombineHcclComm =
+      atb_speed::GetSingleton<atb_speed::ExternalCommManager>().GetCommPtr(
+          dispatchAndCombinecommDomain);
+  parallel_args_ = std::make_unique<ParallelArgs>(global_rank,
+                                                  world_size,
+                                                  dp_size,
+                                                  nullptr,
+                                                  ep_size,
+                                                  mapping_data,
+                                                  mapping,
+                                                  dispatchAndCombinecommDomain,
+                                                  dispatchAndCombineHcclComm);
+#elif defined(USE_MLU)
+  // TODO: create process groups for mlu here
+  parallel_args_ = std::make_unique<ParallelArgs>(
+      global_rank, world_size, dp_size, nullptr, ep_size);
+#endif
+}
+
+const ParallelArgs* CollectiveCommunicator::parallel_args() {
+  // TODO: init communicator
+  return parallel_args_.get();
+}
+
 }  // namespace xllm

@@ -193,4 +193,21 @@ class ProcessGroupHCCL : public ProcessGroup {
 };
 #endif
 
+class CollectiveCommunicator {
+ public:
+  CollectiveCommunicator(int global_rank,
+                         int world_size,
+                         int dp_size,
+                         int ep_size);
+  ~CollectiveCommunicator() = default;
+
+  // init communicator and return parallel args.
+  const ParallelArgs* parallel_args();
+
+ private:
+  std::unique_ptr<ParallelArgs> parallel_args_;
+  std::unique_ptr<ProcessGroup> process_group_;
+  std::unique_ptr<ProcessGroup> dp_local_process_group_;
+};
+
 }  // namespace xllm

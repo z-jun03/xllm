@@ -96,67 +96,8 @@ void WorkerServer::create_server(const runtime::Options& options,
   proto::CommUniqueIdList uids;
   sync_master_node(master_node_addr, addr_info, uids);
 
-  auto dp_local_process_group_num =
-      (dp_size > 1 && dp_size < world_size) ? dp_size : 0;
-  std::unique_ptr<ParallelArgs> parallel_args;
-  // create hccl process group with hccl_root_info
-  // std::vector<HcclRootInfo> unique_ids;
-  // for (const auto& protoId : uids.comm_unique_ids()) {
-  //   HcclRootInfo id;
-  //   std::memcpy(
-  //       id.internal, protoId.comm_unique_id().data(), sizeof(id.internal));
-  //   unique_ids.push_back(id);
-  // }
-  // HcclComm comm;
-  // auto hccl_result = HcclCommInitRootInfo(
-  //     world_size, &unique_ids[0], worker_global_rank, &comm);
-  // CHECK(hccl_result == HCCL_SUCCESS)
-  //     << "HcclCommInitRootInfo failed, global rank is " <<
-  //     worker_global_rank;
-  // std::unique_ptr<ProcessGroupHCCL> hccl_pg =
-  //     std::make_unique<ProcessGroupHCCL>(
-  //         worker_global_rank, world_size, device, comm);
-  MappingNPU::Options mapping_options;
-  mapping_options.dp_size(dp_size)
-      .tp_size(world_size / dp_size)
-      .moe_tp_size(world_size / ep_size)
-      .moe_ep_size(ep_size)
-      .pp_size(1)
-      .sp_size(1);
-
-  MappingNPU mapping_npu(
-      FLAGS_rank_tablefile, world_size, worker_global_rank, mapping_options);
-
-  auto mapping_data = mapping_npu.to_json();
-#if defined(USE_NPU)
-  atb_speed::base::Mapping mapping;
-  mapping.ParseParam(mapping_data);
-  mapping.InitGlobalCommDomain(FLAGS_communication_backend);
-  auto moeEpParallelInfo = mapping.Get(atb_speed::base::MOE_EP);
-  auto dispatchAndCombinecommDomain =
-      atb_speed::GetSingleton<atb_speed::ExternalCommManager>().GetCommDomain(
-          moeEpParallelInfo.groupId,
-          moeEpParallelInfo.rankIds,
-          moeEpParallelInfo.rank,
-          FLAGS_communication_backend,
-          moeEpParallelInfo.bufferSize,
-          false);
-  auto dispatchAndCombineHcclComm =
-      atb_speed::GetSingleton<atb_speed::ExternalCommManager>().GetCommPtr(
-          dispatchAndCombinecommDomain);
-  parallel_args = std::make_unique<ParallelArgs>(worker_global_rank,
-                                                 world_size,
-                                                 dp_size,
-                                                 nullptr,
-                                                 ep_size,
-                                                 mapping_data,
-                                                 mapping,
-                                                 dispatchAndCombinecommDomain,
-                                                 dispatchAndCombineHcclComm);
-#elif defined(USE_MLU)
-  parallel_args = std::make_unique<ParallelArgs>(
-      worker_global_rank, world_size, dp_size, nullptr, ep_size);
-#endif
+  CollectiveCommunicator comm(worker_global_rank, world_size, dp_size, ep_size);
+  const ParallelArgs* parallel_args = comm.parallel_args();
 
   WorkerType worker_type =
       (options.task_type() == "generate") ? WorkerType::LLM : WorkerType::ELM;
