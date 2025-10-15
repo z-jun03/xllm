@@ -18,6 +18,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "core/common/types.h"
 #include "core/framework/chat_template/jinja_chat_template.h"
 #include "mm_data.h"
 #include "multimodal.pb.h"
@@ -69,8 +70,16 @@ class MMInputHelper {
              std::vector<Message>& messages,
              MMInputItemVec& inputs);
 
+  bool trans(const std::vector<MMChatMessage>& raw_input_data,
+             std::vector<Message>& messages,
+             MMInputItemVec& inputs);
+
  private:
   bool trans(const MMInputDataVec& vec,
+             Message::MMContentVec& mmc,
+             MMInputItemVec& input);
+
+  bool trans(const std::vector<MMInputData>& vec,
              Message::MMContentVec& mmc,
              MMInputItemVec& input);
 

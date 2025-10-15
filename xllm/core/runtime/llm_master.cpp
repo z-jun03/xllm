@@ -131,7 +131,6 @@ void LLMMaster::handle_batch_request(std::vector<std::string> prompts,
       << "Number of prompts and sampling parameters should be the same";
 
   const size_t num_requests = prompts.size();
-  scheduler_->incr_pending_requests(num_requests);
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(prompts[i]),
                    std::nullopt,
@@ -153,7 +152,6 @@ void LLMMaster::handle_batch_request(
       << "Number of conversations and sampling parameters should be the same";
 
   const size_t num_requests = conversations.size();
-  scheduler_->incr_pending_requests(num_requests);
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(conversations[i]),
                    std::nullopt,
@@ -173,8 +171,10 @@ void LLMMaster::handle_request(std::string prompt,
                                std::optional<Call*> call,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
-  auto cb = [callback = std::move(callback)](const RequestOutput& output) {
+  auto cb = [callback = std::move(callback),
+             scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
+    scheduler->decr_pending_requests();
     return callback(output);
   };
   // add into the queue
@@ -185,9 +185,6 @@ void LLMMaster::handle_request(std::string prompt,
                          callback = std::move(cb),
                          call]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_completion);
-
-    // remove the pending request after scheduling
-    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     Timer timer;
     // verify the prompt
@@ -214,8 +211,10 @@ void LLMMaster::handle_request(std::vector<Message> messages,
                                std::optional<Call*> call,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
-  auto cb = [callback = std::move(callback)](const RequestOutput& output) {
+  auto cb = [callback = std::move(callback),
+             scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
+    scheduler->decr_pending_requests();
     return callback(output);
   };
   // add into the queue
@@ -226,8 +225,6 @@ void LLMMaster::handle_request(std::vector<Message> messages,
                          callback = std::move(cb),
                          call]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_chat);
-    // remove the pending request after scheduling
-    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     // verify the prompt
     if (!sp.verify_params(callback)) {

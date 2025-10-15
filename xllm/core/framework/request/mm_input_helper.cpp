@@ -147,7 +147,22 @@ class Handler {
     return true;
   }
 
+  bool process(const MMInputData& msg, MMInputItem& input) {
+    if (!this->load(msg, input)) {
+      LOG(ERROR) << " load mm data failed";
+      return false;
+    }
+
+    if (!this->decode(input)) {
+      LOG(ERROR) << " decode mm data failed";
+      return false;
+    }
+
+    return true;
+  }
+
   virtual bool load(const proto::MMInputData& msg, MMInputItem& input) = 0;
+  virtual bool load(const MMInputData& msg, MMInputItem& input) = 0;
   virtual bool decode(MMInputItem& input) = 0;
 
  protected:
@@ -197,6 +212,23 @@ class ImageHandler : public Handler {
     }
   }
 
+  virtual bool load(const MMInputData& msg, MMInputItem& input) {
+    input.clear();
+
+    const auto& url = msg.image_url;
+    if (url.compare(0, dataurl_prefix_.size(), dataurl_prefix_) ==
+        0) {  // data url
+
+      input.type_ = MMType::IMAGE;
+      return this->load_from_dataurl(url, input.raw_data_);
+    } else if (url.compare(0, httpurl_prefix_.size(), httpurl_prefix_) ==
+               0) {  // http url
+
+      input.type_ = MMType::IMAGE;
+      return this->load_from_http(url, input.raw_data_);
+    }
+  }
+
   virtual bool decode(MMInputItem& input) {
     OpenCVImageDecoder decoder;
     return decoder.decode(input.raw_data_, input.decode_data_);
@@ -213,6 +245,18 @@ class MMHandlerSet {
 
   bool process(const std::string& type,
                const proto::MMInputData& msg,
+               MMInputItem& input) {
+    auto itor = handlers_.find(type);
+    if (itor == handlers_.end()) {
+      return false;
+    }
+
+    auto& handler = itor->second;
+    return handler->process(msg, input);
+  }
+
+  bool process(const std::string& type,
+               const MMInputData& msg,
                MMInputItem& input) {
     auto itor = handlers_.find(type);
     if (itor == handlers_.end()) {
@@ -259,6 +303,32 @@ bool MMInputHelper::trans(const MMChatMessageVec& vec,
   return true;
 }
 
+bool MMInputHelper::trans(const std::vector<MMChatMessage>& raw_input_data,
+                          std::vector<Message>& messages,
+                          MMInputItemVec& inputs) {
+  messages.clear();
+  inputs.clear();
+  messages.reserve(raw_input_data.size());
+  inputs.reserve(raw_input_data.size());
+
+  for (int idx = 0; idx < raw_input_data.size(); ++idx) {
+    const auto& chat = raw_input_data[idx];
+    const auto& role = chat.role;
+    const auto& content = chat.content;
+
+    Message::MMContentVec mmc;
+    MMInputItemVec ins;
+    if (!this->trans(content, mmc, ins)) {
+      return false;
+    }
+
+    messages.emplace_back(role, mmc);
+    inputs.insert(inputs.end(), ins.begin(), ins.end());
+  }
+
+  return true;
+}
+
 bool MMInputHelper::trans(const MMInputDataVec& vec,
                           Message::MMContentVec& mmc,
                           MMInputItemVec& inputs) {
@@ -271,6 +341,32 @@ bool MMInputHelper::trans(const MMInputDataVec& vec,
 
     if (type == "text") {
       mmc.emplace_back(type, item.text());
+    } else {
+      MMInputItem input;
+      if (!mm_handlers_->process(type, item, input)) {
+        return false;
+      }
+
+      mmc.emplace_back(type);
+      inputs.emplace_back(input);
+    }
+  }
+
+  return true;
+}
+
+bool MMInputHelper::trans(const std::vector<MMInputData>& vec,
+                          Message::MMContentVec& mmc,
+                          MMInputItemVec& inputs) {
+  mmc.clear();
+  inputs.clear();
+
+  for (int idx = 0; idx < vec.size(); ++idx) {
+    const auto& item = vec[idx];
+    const auto& type = item.type;
+
+    if (type == "text") {
+      mmc.emplace_back(type, item.text);
     } else {
       MMInputItem input;
       if (!mm_handlers_->process(type, item, input)) {

@@ -37,6 +37,8 @@ limitations under the License.
 #if defined(USE_NPU)
 #include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
 #endif
+#include "framework/chat_template/jinja_chat_template.h"
+#include "framework/request/mm_input_helper.h"
 #include "util/device_name_utils.h"
 #include "util/scope_guard.h"
 #include "util/timer.h"
@@ -149,7 +151,6 @@ void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
       << "Number of prompts and sampling parameters should be the same";
 
   const size_t num_requests = prompts.size();
-  scheduler_->incr_pending_requests(num_requests);
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(prompts[i]),
                    std::move(mm_datas[i]),
@@ -171,7 +172,6 @@ void VLMMaster::handle_batch_request(
       << "Number of conversations and sampling parameters should be the same";
 
   const size_t num_requests = conversations.size();
-  scheduler_->incr_pending_requests(num_requests);
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(conversations[i]),
                    std::move(mm_datas[i]),
@@ -184,13 +184,30 @@ void VLMMaster::handle_batch_request(
   }
 }
 
+void VLMMaster::handle_request(const std::vector<MMChatMessage>& raw_input_data,
+                               RequestParams sp,
+                               OutputCallback callback) {
+  static MMInputHelper helper;
+  std::vector<Message> messages;
+  MMInput mm_inputs;
+
+  if (!helper.trans(raw_input_data, messages, mm_inputs.items_)) {
+    LOG(ERROR) << "MMInputHelper trans failed, ingnore this input.";
+    return;
+  }
+
+  handle_request(std::move(messages), std::move(mm_inputs), sp, callback);
+}
+
 void VLMMaster::handle_request(const std::string& prompt,
                                const MMData& mm_data,
                                RequestParams sp,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
-  auto cb = [callback = std::move(callback)](const RequestOutput& output) {
+  auto cb = [callback = std::move(callback),
+             scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
+    scheduler->decr_pending_requests();
     return callback(output);
   };
 
@@ -200,9 +217,6 @@ void VLMMaster::handle_request(const std::string& prompt,
                          sp = std::move(sp),
                          callback = std::move(cb)]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_completion);
-
-    // remove the pending request after scheduling
-    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     Timer timer;
     // verify the prompt
@@ -228,8 +242,10 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
                                RequestParams sp,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
-  auto cb = [callback = std::move(callback)](const RequestOutput& output) {
+  auto cb = [callback = std::move(callback),
+             scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
+    scheduler->decr_pending_requests();
     return callback(output);
   };
 
@@ -239,8 +255,6 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
                          sp = std::move(sp),
                          callback = std::move(cb)]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_chat);
-    // remove the pending request after scheduling
-    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     // verify the prompt
     if (!sp.verify_params(callback)) {

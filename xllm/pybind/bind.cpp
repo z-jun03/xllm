@@ -24,6 +24,7 @@ limitations under the License.
 #include "core/framework/request/request_output.h"
 #include "core/framework/request/request_params.h"
 #include "core/runtime/llm_master.h"
+#include "core/runtime/vlm_master.h"
 
 namespace xllm {
 namespace py = pybind11;
@@ -202,6 +203,38 @@ PYBIND11_MODULE(xllm_export, m) {
       .def_readwrite("embeddings", &SequenceOutput::embeddings)
       .def("__repr__", [](const SequenceOutput& self) {
         return "SequenceOutput({}: {!r})"_s.format(self.index, self.text);
+      });
+
+  // 8. export MMInputData
+  py::class_<MMInputData>(m, "MMInputData")
+      .def(py::init())
+      .def_readwrite("type", &MMInputData::type)
+      .def_readwrite("text", &MMInputData::text)
+      .def_readwrite("image_url", &MMInputData::image_url)
+      .def_readwrite("video_url", &MMInputData::video_url)
+      .def_readwrite("audio_url", &MMInputData::audio_url);
+
+  // 9. export MMChatMessage
+  py::class_<MMChatMessage>(m, "MMChatMessage")
+      .def(py::init())
+      .def_readwrite("role", &MMChatMessage::role)
+      .def_readwrite("content", &MMChatMessage::content);
+
+  // 10. export VLMMaster
+  py::class_<VLMMaster>(m, "VLMMaster")
+      .def(py::init<const Options&>(),
+           py::arg("options"),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_request",
+           py::overload_cast<const std::vector<MMChatMessage>&,
+                             RequestParams,
+                             OutputCallback>(&VLMMaster::handle_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("generate",
+           &VLMMaster::generate,
+           py::call_guard<py::gil_scoped_release>())
+      .def("__repr__", [](const VLMMaster& self) {
+        return "VLMMaster({})"_s.format(self.options());
       });
 }
 

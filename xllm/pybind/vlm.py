@@ -1,11 +1,12 @@
 import os
 import signal
+import time
 from typing import List, Optional, Union
 
-from xllm_export import (LLMMaster, Options, RequestOutput,
-                         RequestParams)
+from xllm_export import (VLMMaster, Options, RequestOutput,
+                         RequestParams, MMInputData, MMChatMessage)
 
-class LLM:
+class VLM:
     def __init__(
         self,
         model: str,
@@ -84,7 +85,7 @@ class LLM:
         options.enable_disagg_pd = enable_disagg_pd
         options.enable_schedule_overlap = False
         options.kv_cache_transfer_mode = kv_cache_transfer_mode
-        self.master = LLMMaster(options)
+        self.master = VLMMaster(options)
 
     def finish(self):
         try:
@@ -93,27 +94,27 @@ class LLM:
         except Exception as e:
             pass
 
+    # NOTE: support one request currently
+    #
     def generate(
         self,
-        prompts: Union[str, List[str]],
-        request_params: Optional[Union[RequestParams, List[RequestParams]]] = None,
+        input_data: Union[MMChatMessage, List[MMChatMessage]],
+        request_params: RequestParams = None,
         wait_schedule_done: bool = True,
     ) -> List[RequestOutput]:
         if request_params is None:
             request_params = RequestParams()
-        if isinstance(prompts, str):
-            prompts = [prompts]
-        if isinstance(request_params, RequestParams):
-            request_params = [request_params]
+        if isinstance(input_data, MMChatMessage):
+            input_data = [input_data]
 
-        outputs = [None] * len(prompts)
-        def callback(index: int, output: RequestOutput) -> bool:
-            outputs[index] = output
+        outputs = [None]
+        def callback(output: RequestOutput) -> bool:
+            outputs[0] = output
             return True
 
         # schedule all requests
-        self.master.handle_batch_request(
-            prompts, request_params, callback
+        self.master.handle_request(
+            input_data, request_params, callback
         )
 
         # TODO: add wait later
@@ -123,15 +124,10 @@ class LLM:
         # generate
         self.master.generate()
 
-        count = len(prompts)
-        idx = 0
-        while idx < count:
-            # wait async output
-            if outputs[idx] is None:
-                continue
-            if outputs[idx].status is not None and not outputs[idx].status.ok:
-                raise ValidationError(outputs[idx].status.code, outputs[idx].status.message)
-            outputs[idx].prompt = prompts[idx]
-            idx += 1
+        # wait async output
+        while outputs[0] is None:
+            time.sleep(0.01)
+        if outputs[0].status is not None and not outputs[0].status.ok:
+            raise ValidationError(outputs[0].status.code, outputs[0].status.message)
 
-        return outputs
+        return outputs[0]
