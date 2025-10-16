@@ -26,10 +26,10 @@ limitations under the License.
 #include "framework/model_context.h"
 #if defined(USE_NPU)
 #include "framework/kv_cache/hccl_kv_cache_transfer.h"
-#include "framework/kv_cache/kv_cache_store.h"
 #include "framework/kv_cache/llm_data_dist_transfer.h"
 #endif
 #include "framework/eplb/eplb_executor.h"
+#include "framework/kv_cache/kv_cache_store.h"
 #include "framework/model/causal_lm.h"
 #include "framework/model/embedding_lm.h"
 #include "framework/model/model_input_params.h"

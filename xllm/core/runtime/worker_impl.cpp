@@ -22,6 +22,8 @@ limitations under the License.
 #include <torch/torch.h>
 #if defined(USE_NPU)
 #include "kernels/npu/xllm_ops/replace_token.h"
+#elif defined(USE_MLU)
+#include <torch_mlu/csrc/framework/core/caching_allocator.h>
 #endif
 
 #include <memory>
@@ -296,7 +298,7 @@ std::tuple<int64_t, int64_t> WorkerImpl::estimate_kv_cache_capacity() {
   c10_npu::NPUCachingAllocator::cacheInfo(
       device_id, &torch_cache, &torch_largest_block);
 #elif defined(USE_MLU)
-  // TODO(mlu): implement mlu estimate kv cache capacity
+  torch_mlu::MLUCachingAllocator::emptyCache();
 #endif
   const auto available_memory = device_.free_memory();
   const auto total_memory = device_.total_memory();
@@ -313,9 +315,9 @@ void WorkerImpl::process_group_test() {
   const auto options = torch::dtype(torch::kHalf).device(device_);
   torch::Tensor tensor = torch::randn({10, 10}, options);
   // call allreduce
-  parallel_state::reduce(tensor, context_.get_parallel_args());
+  parallel_state::reduce(tensor, context_.get_parallel_args().process_group_);
   // call allgather
-  parallel_state::gather(tensor, context_.get_parallel_args());
+  parallel_state::gather(tensor, context_.get_parallel_args().process_group_);
 }
 
 ForwardInput WorkerImpl::prepare_inputs(Batch& batch) {
@@ -371,6 +373,7 @@ void WorkerImpl::prepare_work_before_execute(
     ForwardInput fwd_inputs_on_device;
     fwd_inputs_on_device = inputs.micro_inputs[i].to(device_, dtype_);
     auto& input_params = fwd_inputs_on_device.input_params;
+#if defined(USE_NPU)
     if (input_params.copy_out_blocks.size() > 0 ||
         input_params.copy_in_blocks.size() > 0) {
       const int64_t num_layers = context_.get_model_args().n_layers();
@@ -422,7 +425,6 @@ void WorkerImpl::prepare_work_before_execute(
         }
       }
     }
-
     if (!context_.get_parallel_args().mapping_data().empty()) {
       torch::Tensor token_size_per_dp_group =
           torch::tensor(fwd_inputs_on_device.input_params.dp_global_token_nums,
@@ -446,6 +448,7 @@ void WorkerImpl::prepare_work_before_execute(
         fwd_inputs_on_device.input_params.expert_load_data = expert_load_data_;
       }
     }
+#endif
     processed_inputs.micro_inputs.push_back(std::move(fwd_inputs_on_device));
   }
   processed_inputs.concated_sampling_params =

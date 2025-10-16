@@ -2,7 +2,7 @@ include(cc_library)
 
 # Define the library
 cc_library(
-  NAME 
+  NAME
     models
   HDRS
     model_registry.h

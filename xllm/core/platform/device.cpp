@@ -1,4 +1,9 @@
 #include "device.h"
+#if defined(USE_MLU)
+#include <torch_mlu/csrc/framework/core/caching_allocator.h>
+#include <torch_mlu/csrc/framework/core/device.h>
+#include <torch_mlu/csrc/framework/core/device_utils.h>
+#endif
 
 namespace xllm {
 
@@ -10,7 +15,8 @@ void Device::set_device() const {
 #if defined(USE_NPU)
   auto ret = c10_npu::SetDevice(index());
 #elif defined(USE_MLU)
-  // TODO(mlu): implement mlu set device
+  int ret = 0;
+  torch_mlu::setDevice(index());
 #endif
 
   if (ret != 0) {
@@ -27,8 +33,6 @@ void Device::init_device_context() const {
   std::string device_name = type() + ":" + std::to_string(index());
 #if defined(USE_NPU)
   torch_npu::init_npu(device_name);
-#elif defined(USE_MLU)
-  // TODO(mlu): implement mlu init context
 #endif
 }
 
@@ -36,7 +40,7 @@ int Device::device_count() {
 #if defined(USE_NPU)
   return c10_npu::device_count();
 #elif defined(USE_MLU)
-  // TODO(mlu): implement mlu device count
+  return torch_mlu::device_count();
 #endif
 }
 
@@ -56,7 +60,8 @@ Device::DeviceMem Device::get_device_mem() const {
 #if defined(USE_NPU)
   aclrtGetMemInfo(ACL_HBM_MEM, &free_memory, &total_memory);
 #elif defined(USE_MLU)
-  // TODO(mlu): implement mlu get device mem
+  std::tie(free_memory, total_memory) =
+      torch_mlu::MLUCachingAllocator::MemGetInfo(index());
 #endif
   device_mem.total_memory = static_cast<int64_t>(total_memory);
   device_mem.free_memory = static_cast<int64_t>(free_memory);
@@ -71,7 +76,8 @@ int Device::synchronize_default_stream() {
 #if defined(USE_NPU)
   return aclrtSynchronizeStream(c10_npu::getCurrentNPUStream(index()).stream());
 #elif defined(USE_MLU)
-  // TODO(mlu): implement mlu synchronize stream
+  torch_mlu::getCurrentMLUStream(index()).synchronize();
+  return 0;
 #endif
 }
 

@@ -38,6 +38,7 @@ class QWen3ModelImpl : public LlmModelImplBase<QWen3DecoderLayer> {
 
     blocks_ = register_module("layers", torch::nn::ModuleList());
     layers_.reserve(model_args.n_layers());
+#if defined(USE_NPU)
     norm_ = register_module("norm", layer::RmsNorm(context));
     for (auto i = 0; i < FLAGS_default_micro_batch_num; i++) {
       embed_tokens_.push_back(layer::WordEmbedding(context));
@@ -55,6 +56,18 @@ class QWen3ModelImpl : public LlmModelImplBase<QWen3DecoderLayer> {
     attn_mask_ = layer::AttentionMask(options.device(),
                                       options.dtype().toScalarType(),
                                       /*mask_value=*/mask_value);
+#elif defined(USE_MLU)
+    norm_ = register_module(
+        "norm",
+        layer::RmsNorm(
+            model_args.hidden_size(), model_args.rms_norm_eps(), options));
+    for (auto i = 0; i < FLAGS_default_micro_batch_num; i++) {
+      embed_tokens_.push_back(layer::WordEmbedding(model_args.vocab_size(),
+                                                   model_args.hidden_size(),
+                                                   context.get_parallel_args(),
+                                                   options));
+    }
+#endif
 
     for (int32_t i = 0; i < model_args.n_layers(); i++) {
       auto block = QWen3DecoderLayer(context);

@@ -25,8 +25,10 @@ limitations under the License.
 #include <vector>
 
 #include "common/metrics.h"
+#include "framework/chat_template/jinja_chat_template.h"
 #include "framework/model/model_args.h"
 #include "framework/request/mm_data.h"
+#include "framework/request/mm_input_helper.h"
 #include "framework/request/request.h"
 #include "models/model_registry.h"
 #include "runtime/speculative_engine.h"
@@ -34,11 +36,6 @@ limitations under the License.
 #include "runtime/xservice_client.h"
 #include "scheduler/scheduler_factory.h"
 #include "server/xllm_server_registry.h"
-#if defined(USE_NPU)
-#include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
-#endif
-#include "framework/chat_template/jinja_chat_template.h"
-#include "framework/request/mm_input_helper.h"
 #include "util/device_name_utils.h"
 #include "util/scope_guard.h"
 #include "util/timer.h"
@@ -122,13 +119,6 @@ VLMMaster::~VLMMaster() {
   if (loop_thread_.joinable()) {
     loop_thread_.join();
   }
-
-  // torch::cuda::empty_cache();
-#if defined(USE_NPU)
-  c10_npu::NPUCachingAllocator::emptyCache();
-#elif defined(USE_MLU)
-  // TODO(mlu): implement mlu empty cache
-#endif
 }
 
 void VLMMaster::handle_request(const std::vector<Message>& messages,

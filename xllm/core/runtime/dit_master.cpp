@@ -36,10 +36,6 @@ limitations under the License.
 #include "util/scope_guard.h"
 #include "util/timer.h"
 
-#if defined(USE_NPU)
-#include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
-#endif
-
 namespace xllm {
 DiTMaster::DiTMaster(const Options& options)
     : Master(options, EngineType::DIT) {
@@ -74,12 +70,6 @@ DiTMaster::~DiTMaster() {
   if (loop_thread_.joinable()) {
     loop_thread_.join();
   }
-
-#if defined(USE_NPU)
-  c10_npu::NPUCachingAllocator::emptyCache();
-#elif defined(USE_MLU)
-  // TODO(mlu): implement mlu empty cache
-#endif
 }
 
 void DiTMaster::handle_request(DiTRequestParams params,

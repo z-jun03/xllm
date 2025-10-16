@@ -408,7 +408,6 @@ bool LLMEngine::allocate_continuous_kv_cache(
       .cache_size_per_token(cache_size_per_token);
   kv_cache_manager_ = std::make_unique<XTensorManagerPool>(
       xtensor_manager_options, options_.dp_size());
-
   return true;
 }
 
