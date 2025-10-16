@@ -174,7 +174,6 @@ void LLMMaster::handle_request(std::string prompt,
   auto cb = [callback = std::move(callback),
              scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
-    scheduler->decr_pending_requests();
     return callback(output);
   };
   // add into the queue
@@ -185,6 +184,9 @@ void LLMMaster::handle_request(std::string prompt,
                          callback = std::move(cb),
                          call]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_completion);
+
+    // remove the pending request after scheduling
+    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     Timer timer;
     // verify the prompt
@@ -214,7 +216,6 @@ void LLMMaster::handle_request(std::vector<Message> messages,
   auto cb = [callback = std::move(callback),
              scheduler = scheduler_.get()](const RequestOutput& output) {
     output.log_request_status();
-    scheduler->decr_pending_requests();
     return callback(output);
   };
   // add into the queue
@@ -225,6 +226,9 @@ void LLMMaster::handle_request(std::vector<Message> messages,
                          callback = std::move(cb),
                          call]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_chat);
+
+    // remove the pending request after scheduling
+    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
 
     // verify the prompt
     if (!sp.verify_params(callback)) {
