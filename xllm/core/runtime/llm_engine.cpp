@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "common/device_monitor.h"
 #include "common/global_flags.h"
+#include "common/interruption_bus.h"
 #include "common/metrics.h"
 #include "framework/model/model_args.h"
 #include "framework/model_loader.h"
@@ -56,6 +57,9 @@ uint32_t determine_micro_batches_num(const std::vector<Batch>& batch) {
 LLMEngine::LLMEngine(const runtime::Options& options,
                      std::shared_ptr<DistManager> dist_manager)
     : options_(options), dist_manager_(dist_manager) {
+  InterruptionBus::get_instance().subscribe([this](bool interrupted) {
+    this->layer_forward_interrupted_ = interrupted;
+  });
   auto master_node_addr = options.master_node_addr().value_or("");
   CHECK(!master_node_addr.empty())
       << " LLM need to set master node addr, Please set --master_node_addr.";
@@ -633,6 +637,9 @@ ForwardOutput LLMEngine::step(std::vector<Batch>& batch) {
        worker_rank += dp_local_tp_size_) {
     auto result = results[worker_rank].value();
     if (result.has_value()) {
+      if (result.value().outputs.empty() && layer_forward_interrupted_) {
+        throw ForwardInterruptedException();
+      }
       // set second input param enable_schedule_overlap to false,
       // if it's not enabled, process_sample_output will append the real token,
       // if it's enabled, this false here will append the fake token in

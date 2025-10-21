@@ -16,39 +16,29 @@ limitations under the License.
 #pragma once
 
 #include "disagg_pd.pb.h"
+#include "disagg_pd_service_impl.h"
 
 namespace xllm {
 
 class Engine;
 class Request;
-class DisaggPDScheduler;
+class PDOOCScheduler;
 
-// a class to handle disagg_pd requests
-class DisaggPDServiceImpl {
+// a class to handle disagg_pd OOC requests
+class PDOOCServiceImpl final : public DisaggPDServiceImpl {
  public:
-  explicit DisaggPDServiceImpl(DisaggPDScheduler* scheduler, Engine* engine);
-  ~DisaggPDServiceImpl() = default;
+  explicit PDOOCServiceImpl(PDOOCScheduler* scheduler, Engine* engine);
+  ~PDOOCServiceImpl() = default;
 
-  virtual bool prefill_recv_generation(
-      const proto::DisaggStreamGeneration* request,
-      proto::Status* response);
-
-  virtual void prefill_recv_generations(
-      const proto::DisaggStreamGenerations* requests,
-      proto::StatusSet* responses);
-
-  virtual void decode_recv_new_requests(const proto::DisaggRequests* request,
-                                        proto::DisaggResponses* response);
-
-  virtual void decode_recv_first_generation(
+  virtual void decode_recv_multi_generations(
       const proto::DisaggGenerationsRequests* request,
       proto::Status* response);
 
- protected:
-  std::shared_ptr<Request> generate_request(const proto::DisaggRequest& req);
+  virtual void prefill_recv_pull_signal(const proto::PullSignal* request,
+                                        proto::Status* response);
 
-  DisaggPDScheduler* scheduler_;  // not owned
-  Engine* engine_;                // not owned
+ private:
+  PDOOCScheduler* pd_ooc_scheduler_;  // not owned
 };
 
 }  // namespace xllm

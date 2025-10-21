@@ -21,8 +21,11 @@ limitations under the License.
 #include <glog/logging.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 
 #include "common/metrics.h"
 #include "framework/batch/batch_factory.h"
@@ -180,9 +183,13 @@ void ContinuousScheduler::handle_prefill_requests(
   bool budget_exhausted = false;
   bool blocks_exhausted = false;
   while (!waiting_priority_queue.empty() && remaining_seq_budget > 0 &&
-         remaining_token_budget > 0 && latency_budget > estimate_latency &&
-         kv_cache_manager_->kv_cache_utilization() <
-             FLAGS_prefill_scheduling_memory_usage_threshold) {
+         remaining_token_budget > 0 && latency_budget > estimate_latency) {
+    if (kv_cache_manager_->kv_cache_utilization() >=
+        FLAGS_prefill_scheduling_memory_usage_threshold) {
+      blocks_exhausted = true;
+      break;
+    }
+
     std::shared_ptr<Request> request(waiting_priority_queue.top());
     if (request->finished() || request->cancelled()) {
       kv_cache_manager_->deallocate(request.get());
@@ -382,7 +389,10 @@ void ContinuousScheduler::handle_decode_requests(
       }
       // no budget left
       double seq_estimate_latency = 0;
-      if (options_.enable_latency_aware_schedule()) {
+      if (options_.enable_latency_aware_schedule()
+          // force not enabled on prefill node (only offline req decode here)
+          && !(options_.instance_role().has_value() &&
+               options_.instance_role().value() == InstanceRole::PREFILL)) {
         seq_estimate_latency =
             profile_manager_->predict_step_time(sequence.get(), false);
         if (estimate_latency + allocated_estimate_latency +
@@ -699,7 +709,6 @@ std::vector<Batch> ContinuousScheduler::prepare_batch() {
       }
     }
   } else {
-    // directly push running requests to the priority queue
     for (auto it = running_requests_.begin(); it != running_requests_.end();
          ++it) {
       if (*it == nullptr) {
@@ -890,6 +899,7 @@ void ContinuousScheduler::prepare_cache_async(
 void ContinuousScheduler::step(const absl::Duration& timeout) {
   if (!options_.enable_schedule_overlap()) {
     // get a new batch of requests
+    last_batch_lengths_.clear();
     std::vector<Batch> batch = schedule_request(timeout);
     bool all_empty =
         std::all_of(batch.begin(), batch.end(), [](const Batch& one_batch) {
@@ -898,7 +908,13 @@ void ContinuousScheduler::step(const absl::Duration& timeout) {
     if (all_empty) {
       return;
     }
-    engine_->step(batch);
+
+    if (!options_.enable_pd_ooc()) {
+      engine_->step(batch);
+    } else {
+      step_with_pd_ooc(batch);
+    }
+
     kv_cache_manager_->reset_copy_content();
     // process request output in batch
     process_batch_output(false);
@@ -1100,5 +1116,31 @@ void ContinuousScheduler::update_memory_metrics(
       }
     }
   }
+}
+
+void ContinuousScheduler::step_with_pd_ooc(std::vector<Batch>& batch) {
+  for (size_t i = 0; i < batch.size(); i++) {
+    for (size_t j = 0; j < batch[i].size(); j++) {
+      last_batch_lengths_.push_back(batch[i][j]->num_tokens());
+    }
+  }
+
+  auto start = std::chrono::high_resolution_clock::now();
+  engine_->step(batch);
+  auto end = std::chrono::high_resolution_clock::now();
+  double duration_ms =
+      std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+          .count() /
+      1000.0;
+
+  std::stringstream ss;
+  ss << "bs=" << last_batch_lengths_.size() << " - [";
+  for (size_t i = 0; i < last_batch_lengths_.size(); ++i) {
+    ss << last_batch_lengths_[i];
+    if (i != last_batch_lengths_.size() - 1) ss << ", ";
+  }
+  ss << "]";
+  VLOG(1) << "PERF - " << ss.str() << " - " << std::fixed
+          << std::setprecision(3) << duration_ms << " ms";
 }
 }  // namespace xllm
