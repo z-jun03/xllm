@@ -62,9 +62,13 @@ void PrefillOnlyScheduler::handle_prefill_requests(
   bool blocks_exhausted = false;
 
   while (!waiting_priority_queue.empty() && remaining_seq_budget > 0 &&
-         remaining_token_budget > 0 && latency_budget > estimate_latency &&
-         kv_cache_manager_->kv_cache_utilization() <
-             FLAGS_prefill_scheduling_memory_usage_threshold) {
+         remaining_token_budget > 0 && latency_budget > estimate_latency) {
+    if (kv_cache_manager_->kv_cache_utilization() >=
+        FLAGS_prefill_scheduling_memory_usage_threshold) {
+      blocks_exhausted = true;
+      break;
+    }
+
     std::shared_ptr<Request> request(waiting_priority_queue.top());
     if (request->finished() || request->cancelled()) {
       kv_cache_manager_->deallocate(request.get());
@@ -249,9 +253,13 @@ void PrefillOnlyScheduler::handle_last_step_prefill_requests(
   size_t req_idx = 0;
   while (req_idx < last_step_prefill_requests.size() &&
          remaining_seq_budget > 0 && remaining_token_budget > 0 &&
-         latency_budget > estimate_latency &&
-         kv_cache_manager_->kv_cache_utilization() <
-             FLAGS_prefill_scheduling_memory_usage_threshold) {
+         latency_budget > estimate_latency) {
+    if (kv_cache_manager_->kv_cache_utilization() >=
+        FLAGS_prefill_scheduling_memory_usage_threshold) {
+      blocks_exhausted = true;
+      break;
+    }
+
     std::shared_ptr<Request> request(last_step_prefill_requests[req_idx++]);
     if (request->finished() || request->cancelled()) {
       kv_cache_manager_->deallocate(request.get());

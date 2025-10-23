@@ -98,5 +98,17 @@ uint64_t convert_ip_port_to_uint64(const std::string& ip, uint16_t port) {
   return (static_cast<uint64_t>(ip_network) << 32) | port;
 }
 
+void parse_host_port_from_addr(const std::string& addr,
+                               std::string& host,
+                               int& port) {
+  CHECK(!addr.empty()) << "Address is empty";
+
+  auto colon_pos = addr.find(':');
+  CHECK_NE(colon_pos, std::string::npos) << "Invalid address format: " << addr;
+
+  host = addr.substr(0, colon_pos);
+  port = std::stoi(addr.substr(colon_pos + 1));
+}
+
 }  // namespace net
 }  // namespace xllm

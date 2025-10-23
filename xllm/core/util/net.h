@@ -24,6 +24,9 @@ namespace net {
 std::string get_local_ip_addr();
 int get_local_free_port();
 uint64_t convert_ip_port_to_uint64(const std::string& ip, uint16_t port);
+void parse_host_port_from_addr(const std::string& addr,
+                               std::string& host,
+                               int& port);
 
 }  // namespace net
 }  // namespace xllm

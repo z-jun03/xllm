@@ -28,22 +28,7 @@ limitations under the License.
 #endif
 #include "common/global_flags.h"
 #include "parallel_args.h"
-
-namespace {
-
-void parse_host_port_from_addr(const std::string& addr,
-                               std::string& host,
-                               int& port) {
-  CHECK(!addr.empty()) << "Address is empty";
-
-  auto colon_pos = addr.find(':');
-  CHECK_NE(colon_pos, std::string::npos) << "Invalid address format: " << addr;
-
-  host = addr.substr(0, colon_pos);
-  port = std::stoi(addr.substr(colon_pos + 1));
-}
-
-}  // namespace
+#include "util/net.h"
 
 namespace xllm {
 
@@ -117,7 +102,7 @@ void CollectiveCommunicator::create_process_groups_cncl(
     const torch::Device& device) {
   std::string host;
   int port;
-  parse_host_port_from_addr(master_addr, host, port);
+  net::parse_host_port_from_addr(master_addr, host, port);
 
   std::vector<std::unique_ptr<ProcessGroup>> process_groups;
   int global_rank = parallel_args_->rank();
