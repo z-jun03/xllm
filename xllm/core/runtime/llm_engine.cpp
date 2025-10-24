@@ -74,7 +74,8 @@ LLMEngine::LLMEngine(const runtime::Options& options,
     CHECK_EQ(device.type(), device_type)
         << "All devices should be the same type";
 #if defined(USE_NPU)
-    FLAGS_enable_atb_comm_multiprocess = (options.nnodes() > 1);
+    FLAGS_enable_atb_comm_multiprocess =
+        options.enable_offline_inference() || (options.nnodes() > 1);
 #endif
   }
 

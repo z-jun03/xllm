@@ -1,6 +1,7 @@
 import os
 import signal
 import time
+from . import util
 from typing import List, Optional, Union
 
 from xllm_export import (VLMMaster, Options, RequestOutput,
@@ -28,7 +29,6 @@ class VLM:
         expert_parallel_degree: int = 0,
         enable_mla: bool = False,
         disable_chunked_prefill: bool = False,
-        master_node_addr: str = '127.0.0.1:9988',
         instance_role: str = 'DEFAULT',
         device_ip: str = '',
         transfer_listen_port: int = 26000,
@@ -73,7 +73,8 @@ class VLM:
             options.enable_chunked_prefill = False
         else:
             options.enable_chunked_prefill = True
-        options.master_node_addr = master_node_addr
+        free_port = util.get_free_port()
+        options.master_node_addr = "127.0.0.1:" + str(free_port)
         options.device_ip = device_ip
         options.transfer_listen_port = transfer_listen_port
         options.nnodes = nnodes
@@ -85,6 +86,8 @@ class VLM:
         options.enable_disagg_pd = enable_disagg_pd
         options.enable_schedule_overlap = False
         options.kv_cache_transfer_mode = kv_cache_transfer_mode
+        options.enable_offline_inference = True
+        options.spawn_worker_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         self.master = VLMMaster(options)
 
     def finish(self):

@@ -141,6 +141,9 @@ void DistManager::setup_multi_node_workers(
     // Node2: 0+4, 1+4, 2+4, 3+4
     const int32_t rank = static_cast<int32_t>(i) + base_rank;
 
+    // we use spawn process worker to launch a xllm instance
+    // when start a offline inference task with multi-gpu/npu/mpu/...
+    bool use_spawn_worker = options.enable_offline_inference() && i > 0;
     ParallelArgs parallel_args(rank, world_size, dp_size, nullptr, ep_size);
     servers_.emplace_back(std::make_unique<WorkerServer>(i,
                                                          master_node_addr,
@@ -149,7 +152,8 @@ void DistManager::setup_multi_node_workers(
                                                          parallel_args,
                                                          devices[i],
                                                          worker_server_options,
-                                                         worker_type));
+                                                         worker_type,
+                                                         use_spawn_worker));
   }
 
   // Master node need to wait all workers done

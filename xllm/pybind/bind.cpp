@@ -77,7 +77,10 @@ PYBIND11_MODULE(xllm_export, m) {
       .def_readwrite("disable_ttft_profiling",
                      &Options::disable_ttft_profiling_)
       .def_readwrite("enable_forward_interruption",
-                     &Options::enable_forward_interruption_);
+                     &Options::enable_forward_interruption_)
+      .def_readwrite("enable_offline_inference",
+                     &Options::enable_offline_inference_)
+      .def_readwrite("spawn_worker_path", &Options::spawn_worker_path_);
 
   // 2. export LLMMaster
   py::class_<LLMMaster>(m, "LLMMaster")

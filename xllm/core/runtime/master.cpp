@@ -109,7 +109,9 @@ Master::Master(const Options& options, EngineType type) : options_(options) {
         .enable_disagg_pd(options_.enable_disagg_pd())
         .enable_service_routing(options_.enable_service_routing())
         .enable_cache_upload(options_.enable_cache_upload())
-        .enable_schedule_overlap(options_.enable_schedule_overlap());
+        .enable_schedule_overlap(options_.enable_schedule_overlap())
+        .enable_offline_inference(options_.enable_offline_inference())
+        .spawn_worker_path(options_.spawn_worker_path());
 
     auto engine = std::make_unique<VLMEngine>(eng_options);
     engine_ = std::move(engine);
@@ -148,7 +150,9 @@ Master::Master(const Options& options, EngineType type) : options_(options) {
         .enable_disagg_pd(options_.enable_disagg_pd())
         .enable_service_routing(options_.enable_service_routing())
         .enable_schedule_overlap(options_.enable_schedule_overlap())
-        .enable_cache_upload(options_.enable_cache_upload());
+        .enable_cache_upload(options_.enable_cache_upload())
+        .enable_offline_inference(options_.enable_offline_inference())
+        .spawn_worker_path(options_.spawn_worker_path());
 
     if (options_.device_ip().has_value()) {
       spec_options.device_ip(options_.device_ip().value());
@@ -192,7 +196,9 @@ Master::Master(const Options& options, EngineType type) : options_(options) {
         .store_protocol(options_.store_protocol())
         .store_master_server_entry(options_.store_master_server_entry())
         .store_metadata_connstring(options_.store_metadata_connstring())
-        .enable_continuous_kvcache(options_.enable_continuous_kvcache());
+        .enable_continuous_kvcache(options_.enable_continuous_kvcache())
+        .enable_offline_inference(options_.enable_offline_inference())
+        .spawn_worker_path(options_.spawn_worker_path());
 
     if (options_.device_ip().has_value()) {
       eng_options.device_ip(options_.device_ip().value());

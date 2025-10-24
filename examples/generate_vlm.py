@@ -1,4 +1,5 @@
-# python examples/generate_vlm.py --model='/path/models/Qwen2.5-VL-7B' --devices='npu:0' --master_node_addr=127.0.0.1:8888
+# python examples/generate_vlm.py --model='/path/models/Qwen2.5-VL-7B' --devices='npu:0'
+# python generate_vlm.py --model='/path/models/Qwen2.5-VL-7B' --devices='npu:0,npu:1'
 
 import os
 import signal

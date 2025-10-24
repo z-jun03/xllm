@@ -957,7 +957,8 @@ void ContinuousScheduler::step_with_schedule_overlap(
 
 void ContinuousScheduler::generate() {
   bool batch_empty = false;
-  while (num_pending_requests() > 0 || !batch_empty) {
+  while (num_pending_requests() > 0 || !batch_empty ||
+         request_queue_.size() > 0) {
     // build a batch of requests/sequences
     auto batch = prepare_batch();
     batch_empty = true;

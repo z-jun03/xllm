@@ -35,6 +35,7 @@ static void BM_HashSearch(benchmark::State& state) {
   // token_id_count;
 
   assert((token_id_count / block_size) < total_blocks);
+  uint32_t n_blocks = token_id_count / block_size;
 
   state.PauseTiming();
   BlockManager::Options options;
@@ -51,12 +52,10 @@ static void BM_HashSearch(benchmark::State& state) {
   std::generate(
       token_ids.begin(), token_ids.end(), [&]() { return dist(gen); });
 
-  uint32_t n_blocks = token_id_count / block_size;
-
   std::vector<Block> token_blocks = block_manager.allocate(n_blocks);
   Slice<Block> slice_token_blocks(token_blocks);
   Slice<int32_t> slice_token_ids(token_ids);
-  std::vector<int32_t> match_token_ids(token_ids);
+  Slice<int32_t> match_token_ids(token_ids);
 
   prefix_cache.insert(slice_token_ids, slice_token_blocks);
   state.ResumeTiming();

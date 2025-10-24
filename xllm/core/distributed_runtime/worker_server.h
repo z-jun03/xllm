@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <brpc/server.h>
 #include <folly/futures/Future.h>
+#include <spawn.h>
 #include <torch/torch.h>
 
 #include <thread>
@@ -41,12 +42,10 @@ class WorkerServer {
                const ParallelArgs& parallel_args,
                const torch::Device& d,
                const runtime::Options& options,
-               WorkerType worker_type);
+               WorkerType worker_type,
+               bool use_spawn_worker = false);
 
   virtual ~WorkerServer();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WorkerServer);
 
   void create_server(const runtime::Options& options,
                      std::atomic<bool>& done,
@@ -58,12 +57,27 @@ class WorkerServer {
                      int local_rank,
                      int32_t ep_size);
 
+ private:
+  DISALLOW_COPY_AND_ASSIGN(WorkerServer);
+
+  void create_spawn_server(int local_rank,
+                           const std::string& master_node_addr,
+                           std::atomic<bool>& done,
+                           const ParallelArgs& parallel_args,
+                           const torch::Device& d,
+                           const runtime::Options& options);
+
   bool sync_master_node(const std::string& master_node_addr,
                         proto::AddressInfo& addr_info,
                         proto::CommUniqueIdList& uids);
 
  private:
   std::unique_ptr<std::thread> worker_thread_;
+
+  // for offline inference spawn process worker.
+  bool use_spwan_worker_ = false;
+  posix_spawn_file_actions_t file_actions_;
+  posix_spawnattr_t spawn_attr_;
 };
 
 }  // namespace xllm
