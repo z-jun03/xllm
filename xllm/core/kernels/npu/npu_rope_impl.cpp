@@ -65,8 +65,8 @@ NpuRopeImpl::NpuRopeImpl(const ModelContext& context) : NpuBaseLayer(context) {
   atb::Status status = init_node(rope_node_, rope_param_);
   if (status != atb::NO_ERROR) {
     LOG(ERROR) << "Failed to initialize node, status: " << status;
-    throw std::runtime_error("NpuRopeImpl initialization failed with status: " +
-                             std::to_string(status));
+    LOG(FATAL) << "NpuRopeImpl initialization failed with status: "
+               << std::to_string(status);
   }
 }
 

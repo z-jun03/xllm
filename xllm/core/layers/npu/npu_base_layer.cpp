@@ -157,7 +157,7 @@ atb::Tensor NpuBaseLayer::XTensor2Tensor(
   if (it != dtypeMap.end()) {
     tensor.desc.dtype = it->second;
   } else {
-    throw std::runtime_error("XTensor2Tensor: not support dtype");
+    LOG(FATAL) << "XTensor2Tensor: not support dtype: " << xtensor->dtype();
   }
 
   tensor.dataSize = 0;

@@ -689,7 +689,7 @@ ForwardOutput LLMEngine::step(std::vector<Batch>& batch) {
       // process_sample_output
       batch[dp_rank].process_sample_output(result.value(), false);
     } else {
-      throw std::runtime_error("Failed to execute model");
+      LOG(FATAL) << "Failed to execute model, result has no value";
     }
     ++dp_rank;
   }
@@ -735,7 +735,7 @@ void LLMEngine::update_last_step_result(std::vector<Batch>& last_batch) {
     if (result.has_value()) {
       raw_forward_outputs.emplace_back(std::move(result.value()));
     } else {
-      throw std::runtime_error("Failed to get last step results.");
+      LOG(FATAL) << "Failed to get last step results, result has no value";
     }
   }
 

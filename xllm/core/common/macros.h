@@ -62,4 +62,12 @@ namespace xllm {
 
 #define CALLBACK_WITH_ERROR(CODE, MSG) callback(Status{CODE, MSG});
 
+#define CHECK_ACL_SUCCESS(expr, msg)             \
+  do {                                           \
+    auto _ret = (expr);                          \
+    if (_ret != ACL_SUCCESS) {                   \
+      LOG(FATAL) << "CHECK ACL FAILED: " << msg; \
+    }                                            \
+  } while (0)
+
 }  // namespace xllm

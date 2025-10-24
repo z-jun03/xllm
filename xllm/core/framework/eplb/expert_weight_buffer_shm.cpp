@@ -79,7 +79,7 @@ void ExpertBufferShm::initialize_as_creator() {
 
   if (pthread_mutex_init(&header_->allocation_mutex, &attr) != 0) {
     pthread_mutexattr_destroy(&attr);
-    throw std::runtime_error("Mutex initialization failed");
+    LOG(FATAL) << "Mutex initialization failed.";
   }
   pthread_mutexattr_destroy(&attr);
 
@@ -94,15 +94,15 @@ void ExpertBufferShm::verify_and_recover() {
     pthread_mutex_consistent(&header_->allocation_mutex);
     LOG(WARNING) << "Recovered from orphaned mutex for expert " << expert_id_;
   } else if (rc != 0) {
-    throw std::runtime_error("Failed to acquire mutex");
+    LOG(FATAL) << "Failed to acquire mutex";
   }
   pthread_mutex_unlock(&header_->allocation_mutex);
 }
 
 size_t ExpertBufferShm::get_layer_offset(int32_t layer_id) const {
   if (layer_id < 0 || layer_id >= max_layers_) {
-    throw std::runtime_error("Invalid layer ID: " + std::to_string(layer_id) +
-                             " for expert " + std::to_string(expert_id_));
+    LOG(FATAL) << "Invalid layer ID: " << std::to_string(layer_id)
+               << " for expert " << std::to_string(expert_id_);
   }
   return layer_id * layer_data_region_size_;
 }
@@ -111,17 +111,17 @@ void ExpertBufferShm::add_tensor(int32_t layer_id,
                                  const std::string& tensor_name,
                                  const torch::Tensor& tensor) {
   if (layer_id < 0 || layer_id >= max_layers_) {
-    throw std::runtime_error("Invalid layer ID: " + std::to_string(layer_id) +
-                             " for expert " + std::to_string(expert_id_));
+    LOG(FATAL) << "Invalid layer ID: " << std::to_string(layer_id)
+               << " for expert " << std::to_string(expert_id_);
   }
   if (tensor_name.empty()) {
-    throw std::runtime_error("Tensor name cannot be empty");
+    LOG(FATAL) << "Tensor name cannot be empty";
   }
   if (!tensor.defined() || !tensor.is_contiguous()) {
-    throw std::runtime_error("Tensor must be defined and contiguous");
+    LOG(FATAL) << "Tensor must be defined and contiguous";
   }
   if (tensor.device().type() != torch::kCPU) {
-    throw std::runtime_error("Only CPU tensors can be stored in shared memory");
+    LOG(FATAL) << "Only CPU tensors can be stored in shared memory";
   }
 
   std::lock_guard<std::mutex> lock(local_mutex_);
@@ -136,16 +136,15 @@ void ExpertBufferShm::add_tensor(int32_t layer_id,
     if (meta.tensor_name[0] == '\0') {
       if (available_slot == -1) available_slot = i;
     } else if (strcmp(meta.tensor_name, tensor_name.c_str()) == 0) {
-      throw std::runtime_error(
-          "Tensor '" + tensor_name + "' already exists for expert " +
-          std::to_string(expert_id_) + " layer " + std::to_string(layer_id));
+      LOG(FATAL) << "Tensor '" << tensor_name << "' already exists for expert "
+                 << std::to_string(expert_id_) << " layer "
+                 << std::to_string(layer_id);
     }
   }
 
   if (available_slot == -1) {
-    throw std::runtime_error("No available slots for expert " +
-                             std::to_string(expert_id_) + " layer " +
-                             std::to_string(layer_id));
+    LOG(FATAL) << "No available slots for expert " << std::to_string(expert_id_)
+               << " layer " << std::to_string(layer_id);
   }
 
   // Prepare the tensor metadata
@@ -171,12 +170,11 @@ void ExpertBufferShm::add_tensor(int32_t layer_id,
   }
 
   if (layer_data_offset + aligned_size > layer_data_region_size_) {
-    throw std::runtime_error(
-        "Insufficient space in expert " + std::to_string(expert_id_) +
-        " layer " + std::to_string(layer_id) + " (needs " +
-        std::to_string(aligned_size) + " bytes, has " +
-        std::to_string(layer_data_region_size_ - layer_data_offset) +
-        " remaining)");
+    LOG(FATAL) << "Insufficient space in expert " << std::to_string(expert_id_)
+               << " layer " << std::to_string(layer_id) << " (needs "
+               << std::to_string(aligned_size) << " bytes, has "
+               << std::to_string(layer_data_region_size_ - layer_data_offset)
+               << " remaining)";
   }
 
   // Set final storage location
@@ -196,8 +194,8 @@ void ExpertBufferShm::add_tensor(int32_t layer_id,
 torch::Tensor ExpertBufferShm::get_tensor(int32_t layer_id,
                                           const std::string& tensor_name) {
   if (layer_id < 0 || layer_id >= max_layers_) {
-    throw std::runtime_error(
-        fmt::format("Invalid layer ID {} for expert {}", layer_id, expert_id_));
+    LOG(FATAL) << "Invalid layer ID: " << layer_id << " for expert "
+               << expert_id_;
   }
 
   // Validate expert ID
@@ -220,11 +218,8 @@ torch::Tensor ExpertBufferShm::get_tensor(int32_t layer_id,
       // Validate metadata
       if (meta.data_offset < 0 || meta.actual_size == 0 ||
           meta.data_offset + meta.actual_size > shm_->size()) {
-        throw std::runtime_error(fmt::format(
-            "Corrupted tensor metadata for {} in expert {} layer {}",
-            tensor_name,
-            expert_id_,
-            layer_id));
+        LOG(FATAL) << "Corrupted tensor metadata for " << tensor_name
+                   << " in expert " << expert_id_ << " layer " << layer_id;
       }
 
       // Create tensor options from stored type
@@ -244,11 +239,8 @@ torch::Tensor ExpertBufferShm::get_tensor(int32_t layer_id,
     }
   }
 
-  throw std::runtime_error(
-      fmt::format("Tensor {} not found in expert {} layer {}",
-                  tensor_name,
-                  expert_id_,
-                  layer_id));
+  LOG(FATAL) << "Tensor " << tensor_name << " not found in expert "
+             << expert_id_ << " layer " << layer_id;
 }
 
 }  // namespace xllm

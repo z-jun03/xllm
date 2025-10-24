@@ -29,16 +29,8 @@ limitations under the License.
 
 #include "acl/acl.h"
 #include "aclnn_apply_top_k_top_p.h"
+#include "core/common/macros.h"
 #include "top_k_top_p.h"
-
-#define CHECK_ACL_SUCCESS(expr, msg) \
-  do {                               \
-    auto _ret = (expr);              \
-    if (_ret != ACL_SUCCESS) {       \
-      LOG(ERROR) << msg;             \
-      throw std::runtime_error(msg); \
-    }                                \
-  } while (0)
 
 namespace xllm_ops {
 void top_k_top_p(torch::Tensor& logits,

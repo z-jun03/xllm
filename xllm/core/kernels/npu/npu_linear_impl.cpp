@@ -31,9 +31,7 @@ NpuLinearImpl::NpuLinearImpl(const ModelContext& context)
   atb::Status status = init_node(linear_node_);
   if (status != atb::NO_ERROR) {
     LOG(ERROR) << "Failed to initialize node, status: " << status;
-    throw std::runtime_error(
-        "NpuLinearImpl initialization failed with status: " +
-        std::to_string(status));
+    LOG(FATAL) << "NpuLinearImpl initialization failed with status: " << status;
   }
 }
 
@@ -96,10 +94,8 @@ torch::Tensor NpuLinearImpl::forward(const torch::Tensor& input, int nodeId) {
   st = execute_node(linear_node_, nodeId);
 
   if (st != 0) {
-    LOG(ERROR) << model_name_ << " infer shape fail, error code: " << st;
-    throw std::runtime_error(
-        model_name_ +
-        " inference failed with error code: " + std::to_string(st));
+    LOG(FATAL) << model_name_
+               << " inference failed with error code: " << std::to_string(st);
   }
 
   return at_out_tensors_.at(0);

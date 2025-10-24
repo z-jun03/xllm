@@ -67,9 +67,8 @@ NpuRmsNormImpl::NpuRmsNormImpl(const ModelContext& context)
   atb::Status status = init_node(norm_node_, norm_param_);
   if (status != atb::NO_ERROR) {
     LOG(ERROR) << "Failed to initialize node, status: " << status;
-    throw std::runtime_error(
-        "NpuRmsNormImpl initialization failed with status: " +
-        std::to_string(status));
+    LOG(FATAL) << "NpuRmsNormImpl initialization failed with status: "
+               << std::to_string(status);
   }
 }
 

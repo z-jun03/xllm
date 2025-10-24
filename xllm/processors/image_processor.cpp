@@ -22,7 +22,7 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
                                      int resample,
                                      bool antialias) {
   if (image.dim() != 3) {
-    throw std::invalid_argument("Input image must be a 3D tensor (C x H x W).");
+    LOG(FATAL) << "Input image must be a 3D tensor (C x H x W).";
   }
   auto options = torch::nn::functional::InterpolateFuncOptions()
                      .size(size)
@@ -39,8 +39,7 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
       options.mode(torch::kBicubic);
       break;
     default:
-      throw std::invalid_argument(
-          "Invalid resample value. Must be one of 1, 2, or 3.");
+      LOG(FATAL) << "Invalid resample value. Must be one of 1, 2, or 3.";
   }
   return torch::nn::functional::interpolate(image.unsqueeze(0), options)
       .squeeze(0)
@@ -51,8 +50,8 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
 torch::Tensor ImageProcessor::centerCrop(const torch::Tensor& image,
                                          const std::pair<int, int>& cropSize) {
   if (image.dim() != 3) {
-    throw std::runtime_error(
-        "Input image must be a 3-dimensional tensor in (C, H, W) format.");
+    LOG(FATAL)
+        << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
   }
 
   int cropHeight = cropSize.first;
@@ -103,16 +102,15 @@ torch::Tensor ImageProcessor::normalize(const torch::Tensor& image,
                                         const std::vector<double>& mean,
                                         const std::vector<double>& std) {
   if (image.dim() != 3) {
-    throw std::runtime_error(
-        "Input image must be a 3-dimensional tensor in (C, H, W) format.");
+    LOG(FATAL)
+        << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
   }
 
   int numChannels = image.size(0);
   if (mean.size() != numChannels || std.size() != numChannels) {
-    throw std::runtime_error(
-        "Mean and std vectors must have the same number "
-        "of elements as the number of channels in the "
-        "image.");
+    LOG(FATAL) << "Mean and std vectors must have the same number "
+               << "of elements as the number of channels in the "
+               << "image.";
   }
 
   auto result = image;

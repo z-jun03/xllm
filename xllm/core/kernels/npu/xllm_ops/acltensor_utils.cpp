@@ -71,7 +71,7 @@ void create_acltensor(aclTensor** tensor, const torch::Tensor& tensor_data) {
                             deviceData);
   if (*tensor == nullptr) {
     LOG(ERROR) << "create_acltensor: failed to create acltensor";
-    throw std::runtime_error("create_acltensor: failed to create acltensor");
+    LOG(FATAL) << "create_acltensor: failed to create acltensor";
   }
 }
 
@@ -79,16 +79,13 @@ void check_tensor(const torch::Tensor& t,
                   const std::string& name,
                   const std::string& func_name) {
   if (!t.defined()) {
-    LOG(ERROR) << func_name << ": " << name << " is not defined";
-    throw std::runtime_error(func_name + ": " + name + " is not defined");
+    LOG(FATAL) << func_name << ": " << name << " is not defined";
   }
   if (t.numel() == 0) {
-    LOG(ERROR) << func_name << ": " << name << " is empty";
-    throw std::runtime_error(func_name + ": " + name + " is empty");
+    LOG(FATAL) << func_name << ": " << name << " is empty";
   }
   if (t.data_ptr() == nullptr) {
-    LOG(ERROR) << func_name << ": " << name << " data pointer is null";
-    throw std::runtime_error(func_name + ": " + name + " data pointer is null");
+    LOG(FATAL) << func_name << ": " << name << " data pointer is null";
   }
 }
 
@@ -98,7 +95,7 @@ void check_tensor_shapes_equal(const torch::Tensor& a,
   if (a.sizes() != b.sizes()) {
     LOG(ERROR) << func_name << ": tensor shapes do not match. "
                << "a shape: " << a.sizes() << ", b shape: " << b.sizes();
-    throw std::runtime_error(func_name + ": tensor shapes do not match");
+    LOG(FATAL) << func_name << ": tensor shapes do not match";
   }
 }
 

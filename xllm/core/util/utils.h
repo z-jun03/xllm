@@ -51,19 +51,19 @@ std::optional<std::vector<uint32_t>> parse_batch_sizes(
 
 template <typename T>
 T sum(const std::vector<T>& vec) {
-  if (vec.empty()) throw std::runtime_error("vector is empty.");
+  if (vec.empty()) LOG(FATAL) << "vector is empty.";
   return std::accumulate(vec.begin(), vec.end(), T{});
 }
 
 template <typename T>
 const T& min(const std::vector<T>& vec) {
-  if (vec.empty()) throw std::runtime_error("vector is empty.");
+  if (vec.empty()) LOG(FATAL) << "vector is empty.";
   return *std::min_element(vec.begin(), vec.end());
 }
 
 template <typename T>
 const T& max(const std::vector<T>& vec) {
-  if (vec.empty()) throw std::runtime_error("vector is empty.");
+  if (vec.empty()) LOG(FATAL) << "vector is empty.";
   return *std::max_element(vec.begin(), vec.end());
 }
 

@@ -128,7 +128,7 @@ int64_t LinearOpFlops::size() const { return input_dim * output_dim; }
 int64_t LinearOpFlops::_saturation_bs() const {
   auto model = get_perf_model();
   if (!model) {
-    throw std::runtime_error("Performance model is not set");
+    LOG(FATAL) << "Performance model is not set";
   }
 
   int64_t i = 0;
@@ -237,7 +237,7 @@ Resource AttentionFlops::operator()(const std::vector<int>& q_lens,
                                     const std::vector<int>& kv_lens,
                                     bool is_decode) const {
   if (q_lens.size() != kv_lens.size()) {
-    throw std::runtime_error("q_lens and kv_lens must have the same length");
+    LOG(FATAL) << "q_lens and kv_lens must have the same length";
   }
 
   Resource r;
@@ -396,7 +396,7 @@ int64_t LLMFlops::decode_preferred_req_len(
     int64_t remain_vram_req_total_len) const {
   auto model = get_perf_model();
   if (!model) {
-    throw std::runtime_error("Performance model is not set");
+    LOG(FATAL) << "Performance model is not set";
   }
 
   int64_t left_bs = std::max(target_bs - current_batch.size(), 1UL);

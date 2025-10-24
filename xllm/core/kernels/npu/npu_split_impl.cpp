@@ -76,9 +76,8 @@ NpuSplitImpl::NpuSplitImpl(const ModelContext& context,
   atb::Status status = init_node(split_node_, split_param_);
   if (status != atb::NO_ERROR) {
     LOG(ERROR) << "Failed to initialize node, status: " << status;
-    throw std::runtime_error(
-        "NpuSplitImpl initialization failed with status: " +
-        std::to_string(status));
+    LOG(FATAL) << "NpuSplitImpl initialization failed with status: "
+               << std::to_string(status);
   }
 }
 

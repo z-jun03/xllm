@@ -99,8 +99,7 @@ torch::Tensor EplbPolicy::compute_balanced_pack(
       auto min_idx = torch::argmin(device_loads).item<int64_t>();
       auto available_pos = torch::nonzero(device_assignments[min_idx] == -1);
       if (available_pos.size(0) == 0) {
-        throw std::runtime_error("Device " + std::to_string(min_idx) +
-                                 " is full");
+        LOG(FATAL) << "Device " << min_idx << " is full";
       }
       auto pos = available_pos.select(0, 0).item<int64_t>();
 
@@ -126,8 +125,7 @@ torch::Tensor EplbPolicy::compute_balanced_pack(
 
     auto pos = torch::nonzero(device_assignments[target_device] == -1);
     if (pos.size(0) == 0) {
-      throw std::runtime_error("Target device " +
-                               std::to_string(target_device) + " is full");
+      LOG(FATAL) << "Target device " << target_device << " is full";
     }
     auto pos_idx = pos.select(0, 0).item<int64_t>();
     device_assignments[target_device][pos_idx] = expert_id;

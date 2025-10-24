@@ -66,7 +66,7 @@ torch::Dtype BaseLayer::string2dtype(const std::string& dtype_str) {
     return torch::kBool;
   }
 
-  throw std::runtime_error("Unsupported dtype string");
+  LOG(FATAL) << "Unsupported dtype string: " << dtype_str;
 }
 
 void BaseLayer::correct_tensor_dtype(torch::Tensor& tensor,

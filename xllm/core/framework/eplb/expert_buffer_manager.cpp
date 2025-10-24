@@ -35,7 +35,7 @@ void ExpertBufferManager::add_tensor(int32_t expert_id,
                                      const std::string& tensor_name,
                                      const torch::Tensor& tensor) {
   if (expert_id < 0 || expert_id >= num_experts_) {
-    throw std::runtime_error("Invalid expert ID: " + std::to_string(expert_id));
+    LOG(FATAL) << "Invalid expert ID: " << expert_id;
   }
   expert_buffers_[expert_id]->add_tensor(layer_id, tensor_name, tensor);
 }
@@ -44,7 +44,7 @@ torch::Tensor ExpertBufferManager::get_tensor(int32_t expert_id,
                                               int32_t layer_id,
                                               const std::string& tensor_name) {
   if (expert_id < 0 || expert_id >= num_experts_) {
-    throw std::runtime_error("Invalid expert ID: " + std::to_string(expert_id));
+    LOG(FATAL) << "Invalid expert ID: " << expert_id;
   }
   return expert_buffers_[expert_id]->get_tensor(layer_id, tensor_name);
 }

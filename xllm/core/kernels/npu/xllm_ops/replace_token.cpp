@@ -29,16 +29,9 @@ limitations under the License.
 
 #include "acl/acl.h"
 #include "aclnn_replace_token.h"
+#include "core/common/macros.h"
 #include "replace_token.h"
 
-#define CHECK_ACL_SUCCESS(expr, msg) \
-  do {                               \
-    auto _ret = (expr);              \
-    if (_ret != ACL_SUCCESS) {       \
-      LOG(ERROR) << msg;             \
-      throw std::runtime_error(msg); \
-    }                                \
-  } while (0)
 namespace xllm_ops {
 
 void replace_token(torch::Tensor& dst, torch::Tensor& src) {

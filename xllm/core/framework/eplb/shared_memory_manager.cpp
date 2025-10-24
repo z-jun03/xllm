@@ -41,8 +41,7 @@ SharedMemoryManager::SharedMemoryManager(const std::string& name,
   if (!is_creator) {
     fd_ = shm_open(name.c_str(), O_RDWR, 0666);
     if (fd_ == -1) {
-      throw std::runtime_error("shm_open failed: " +
-                               std::string(strerror(errno)));
+      LOG(FATAL) << "shm_open failed: " << strerror(errno);
     }
   } else {
     // Track created SHM for later cleanup
@@ -53,15 +52,14 @@ SharedMemoryManager::SharedMemoryManager(const std::string& name,
   // Set size for new SHM
   if (is_creator && ftruncate(fd_, size) == -1) {
     close(fd_);
-    throw std::runtime_error("ftruncate failed: " +
-                             std::string(strerror(errno)));
+    LOG(FATAL) << "ftruncate failed: " << strerror(errno);
   }
 
   // Map into process address space
   addr_ = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
   if (addr_ == MAP_FAILED) {
     close(fd_);
-    throw std::runtime_error("mmap failed: " + std::string(strerror(errno)));
+    LOG(FATAL) << "mmap failed: " << strerror(errno);
   }
 }
 
@@ -103,7 +101,9 @@ void* SharedMemoryManager::allocate(int64_t size, int64_t alignment) {
   // Calculate aligned size and check bounds
   int64_t aligned_size = (size + alignment - 1) & ~(alignment - 1);
   if (current_offset_ + aligned_size > size_) {
-    throw std::runtime_error("Shared memory overflow");
+    LOG(FATAL) << "Shared memory overflow, size_ = " << size_
+               << ", aligned_size = " << aligned_size
+               << ", current_offset_ = " << current_offset_;
   }
 
   // Return current offset and advance

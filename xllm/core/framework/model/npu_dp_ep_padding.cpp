@@ -38,7 +38,9 @@ DpEpPadding::DpEpPadding(torch::Tensor token_size_per_dp_group,
       expert_parallel_degree_(0) {
   // Validate input tensor
   if (token_size_per_dp_group_.dim() != 1) {
-    throw std::runtime_error("token_size_per_dp_group must be 1-dimensional");
+    LOG(FATAL)
+        << "token_size_per_dp_group must be 1-dimensional, current dim is "
+        << token_size_per_dp_group_.dim();
   }
   token_size_per_dp_group_ = torch::where(token_size_per_dp_group_ == 0,
                                           torch::tensor(1).to(torch::kInt32),
@@ -50,7 +52,8 @@ DpEpPadding::DpEpPadding(torch::Tensor token_size_per_dp_group,
   int64_t attn_tp_size = mapping_npu_["attnTpSize"].get<int64_t>();
 
   if (attn_tp_rank >= attn_tp_size || attn_tp_rank < 0) {
-    throw std::runtime_error("Invalid attnTp rank");
+    LOG(FATAL) << "Invalid attnTp rank, attn_tp_rank = " << attn_tp_rank
+               << ", attn_tp_size = " << attn_tp_size;
   }
 
   rank_ = attn_tp_rank + attn_dp_rank * attn_tp_size;
