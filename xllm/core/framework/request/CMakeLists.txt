@@ -9,6 +9,7 @@ cc_library(
     dit_request_params.h
     finish_reason.h
     incremental_decoder.h
+    mm_codec.h
     mm_data.h
     mm_input_helper.h
     request_base.h
@@ -29,6 +30,7 @@ cc_library(
     dit_request.cpp
     finish_reason.cpp
     incremental_decoder.cpp
+    mm_codec.cpp
     mm_data.cpp
     mm_input_helper.cpp
     request.cpp
