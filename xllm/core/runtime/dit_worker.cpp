@@ -67,11 +67,20 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   DiTCacheConfig cache_config_;
 
   // TODO: Optimize ditcache configuration initialization.
+
   cache_config_.selected_policy = PolicyType::TaylorSeer;
-  cache_config_.taylorseer.n_derivatives = 3;
-  cache_config_.taylorseer.skip_interval_steps = 3;
+  cache_config_.taylorseer.n_derivatives = 2;
+  cache_config_.taylorseer.skip_interval_steps = 6;
   cache_config_.taylorseer.num_inference_steps = 25;
-  cache_config_.taylorseer.warmup_steps = 0;
+  cache_config_.taylorseer.warmup_steps = 2;
+
+  // cache_config_.selected_policy = PolicyType::FBCacheTaylorSeer;
+  // cache_config_.fbcachetaylorseer.n_derivatives = 3;
+  // cache_config_.fbcachetaylorseer.num_inference_steps = 25;
+  // cache_config_.fbcachetaylorseer.warmup_steps = 2;
+  // cache_config_.fbcachetaylorseer.residual_diff_threshold = 0.09;
+
+  // cache_config_.selected_policy = PolicyType::None;
 
   bool success = DiTCache::get_instance().init(cache_config_);
   CHECK(success) << "DiTCache init failed";

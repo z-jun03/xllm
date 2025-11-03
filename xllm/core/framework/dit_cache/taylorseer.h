@@ -72,6 +72,13 @@ class TaylorSeer : public DitCacheImpl {
   std::vector<torch::Tensor> dY_current_;
   std::vector<bool> valid_prev_;
   std::vector<bool> valid_current_;
+
+  // 新增成员（放到 TaylorSeer 类的 private 区）
+  std::vector<torch::Tensor> dY_smoothed_;  // EMA 平滑后的导数
+  double alpha_ = 0.5;                      // 时间归一化因子（可调整）
+  double damping_ = 0.9;                    // 高阶阻尼因子（可调整）
+  double ema_beta_ = 0.1;  // EMA 平滑系数（[0,1)，越接近1平滑越强）
+  torch::Tensor source;
 };
 
 }  // namespace xllm

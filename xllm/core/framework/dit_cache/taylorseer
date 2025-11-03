@@ -88,7 +88,7 @@ torch::Tensor TaylorSeer::approximate_value() {
   torch::Tensor output = torch::zeros_like(dY_current_[0]);
   for (int i = 0; i < order_; ++i) {
     if (!valid_current_[i]) break;
-    LOG(INFO) << "commpute " << i;
+    LOG(INFO) << "commpute " << i ;
     double coef =
         std::pow(static_cast<double>(elapsed_steps), i) / factorial(i + 1);
     if (i == 0)
@@ -113,39 +113,38 @@ void TaylorSeer::update(const torch::Tensor& Y) {
   } else {
     auto [new_dY, new_valid] = approximate_derivative(Y);
     // 判断哪一步使用了Cache
-    for (int i = 0; i < order_; ++i) {
+    for (int i = 0; i< order_; ++i) {
       if (!new_valid[i]) break;
       LOG(INFO) << "导数" << i;
       if (use_cache_) {
-        if (i == 0)
-          dY_smoothed_[i] = new_dY[i];
-        else if (!dY_current_[i].defined())
-          dY_smoothed_[i] = new_dY[i];
-        else if (i == 2)
-          dY_smoothed_[i] =
-              dY_smoothed_[i] * (1 - ema_beta_) + ema_beta_ * new_dY[i];
-        else
-          dY_smoothed_[i] = new_dY[i];
-      } else {
-        dY_smoothed_[i] = new_dY[i];  // 这样会产生即便，有噪声
+      if (i == 0)
+        dY_smoothed_[i] = new_dY[i];
+      else 
+        if(!dY_current_[i].defined())
+        dY_smoothed_[i] = new_dY[i];
+        else 
+        dY_smoothed_[i] = dY_smoothed_[i] * (1 - ema_beta_) + ema_beta_ * new_dY[i];
+      }
+      else {
+        dY_smoothed_[i] = new_dY[i];      //这样会产生即便，有噪声
       }
       // LOG(INFO) << "完成导数" << i;
     }
+
 
     // for (int i = 0; i < order_; ++i) {
     //   if (!valid_current_[i]) break;
     //   if (i==0) {
     //     dY_current_[i] = new_dY[i];
     //   }
-    //   else
+    //   else 
     //   dY_current_[i] = new_dY[i] * (1 - ema_beta_) + ema_beta_ * dY_prev_[i];
     // }
-    // dY_current_ = new_dY;
+    dY_current_ = new_dY;
     dY_current_ = std::move(new_dY);
-    // dY_current_ = dY_smoothed_;
     valid_current_ = std::move(new_valid);
   }
-  // last_non_approximated_step_ = current_step_;
+  last_non_approximated_step_ = current_step_;
 }
 
 bool TaylorSeer::on_before_block(const CacheBlockIn&) { return false; }
@@ -176,7 +175,6 @@ bool TaylorSeer::on_before_step(const CacheStepIn& stepin) {
 CacheStepOut TaylorSeer::on_after_step(const CacheStepIn& stepin) {
   LOG(INFO) << "TaylorSeer: step " << stepin.step_id << " use_cache";
   if (!use_cache_) {
-    last_non_approximated_step_ = current_step_;
     update(stepin.tensors.at("hidden_states"));
     source = stepin.tensors.at("hidden_states");
     return CacheStepOut(stepin.tensors);
