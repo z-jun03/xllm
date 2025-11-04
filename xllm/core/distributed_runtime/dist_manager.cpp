@@ -100,7 +100,7 @@ std::unique_ptr<CommChannel> create_channel(const std::string& worker_addrs,
                                             const runtime::Options& options) {
   std::unique_ptr<CommChannel> channel;
 
-  if (net::extract_ip(FLAGS_master_node_addr) ==
+  if (net::extract_ip(options.master_node_addr().value_or("")) ==
           net::extract_ip(worker_addrs) &&
       options.enable_shm()) {
     // create shared memory manager for local rank
@@ -118,6 +118,7 @@ std::unique_ptr<CommChannel> create_channel(const std::string& worker_addrs,
 
   return channel;
 }
+
 }  // namespace
 
 void DistManager::setup_multi_node_workers(

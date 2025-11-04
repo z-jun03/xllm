@@ -289,9 +289,11 @@ void VLMMaster::run() {
 }
 
 void VLMMaster::generate() {
+  DCHECK(options_.enable_schedule_overlap())
+      << "Mode generate does not support schedule overlap yet.";
   const bool already_running = running_.load(std::memory_order_relaxed);
   if (already_running) {
-    LOG(WARNING) << "VLMMaster is already running.";
+    LOG(WARNING) << "Generate is already running.";
     return;
   }
 

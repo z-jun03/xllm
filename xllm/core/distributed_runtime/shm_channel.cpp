@@ -16,6 +16,7 @@ limitations under the License.
 #include "shm_channel.h"
 
 #include "common/global_flags.h"
+#include "util/net.h"
 
 namespace xllm {
 
@@ -26,16 +27,18 @@ ShmChannel::ShmChannel(int dp_group,
     : enable_shm_(options.enable_shm()) {
   bool is_creator;
 
+  std::string name_prefix =
+      "xllm_" + net::extract_port(options.master_node_addr().value_or(""));
   if (is_driver) {
     auto name = ForwardSharedMemoryManager::create_unique_name(
-        dp_group, FORWARD_RAW_INPUT_TYPE, rank);
+        name_prefix, dp_group, FORWARD_RAW_INPUT_TYPE, rank);
     input_shm_manager_ = std::make_unique<ForwardSharedMemoryManager>(
         name, PB_INPUT_SHM_SIZE, is_creator, FORWARD_RAW_INPUT_TYPE);
     LOG(INFO) << "Create input shared memory manager with name: " << name;
   }
 
   auto name = ForwardSharedMemoryManager::create_unique_name(
-      dp_group, FORWARD_RAW_OUTPUT_TYPE, rank);
+      name_prefix, dp_group, FORWARD_RAW_OUTPUT_TYPE, rank);
   output_shm_manager_ = std::make_unique<ForwardSharedMemoryManager>(
       name, PB_OUTPUT_SHM_SIZE, is_creator, FORWARD_RAW_OUTPUT_TYPE);
   LOG(INFO) << "Create output shared memory manager with name: " << name;

@@ -44,6 +44,7 @@ class LLM:
         disable_ttft_profiling: bool = False,
         enable_forward_interruption: bool = False,
         enable_shm: bool = False,
+        is_local: bool = True,
         **kwargs,
     ) -> None:
 
@@ -95,6 +96,7 @@ class LLM:
         options.enable_offline_inference = True
         options.spawn_worker_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         options.enable_shm = enable_shm
+        options.is_local = is_local
         self.master = LLMMaster(options)
 
     def finish(self):

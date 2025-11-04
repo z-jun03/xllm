@@ -50,6 +50,8 @@ VLMEngine::VLMEngine(const runtime::Options& options) : options_(options) {
     process_groups_ = parallel_state::create_npu_process_groups(devices);
   }
 
+  CHECK(!options_.enable_shm()) << "VLM can not support enable_shm currently.";
+
   WorkerType worker_type =
       (options_.task_type() == "generate") ? WorkerType::VLM : WorkerType::EVLM;
   const int32_t world_size = static_cast<int32_t>(devices.size());

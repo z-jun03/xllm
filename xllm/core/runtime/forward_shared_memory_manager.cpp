@@ -655,10 +655,12 @@ ForwardSharedMemoryManager::~ForwardSharedMemoryManager() = default;
 
 /* The shared memory filename may have duplicates when using kill -9 xllm, but
   this doesn't affect usage.*/
-std::string ForwardSharedMemoryManager::create_unique_name(int dp_group,
-                                                           int forward_type,
-                                                           int rank) {
-  std::string filename = "xllm_" + net::extract_port(FLAGS_master_node_addr);
+std::string ForwardSharedMemoryManager::create_unique_name(
+    const std::string& prefix,
+    int dp_group,
+    int forward_type,
+    int rank) {
+  std::string filename = prefix;
   if (forward_type == FORWARD_PB_INPUT_TYPE ||
       forward_type == FORWARD_RAW_INPUT_TYPE) {
     filename += "_dpg_" + std::to_string(dp_group) + "_input";

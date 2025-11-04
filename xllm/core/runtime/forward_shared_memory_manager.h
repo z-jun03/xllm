@@ -47,7 +47,8 @@ class ForwardSharedMemoryManager : public SharedMemoryManager {
                                       bool& is_creator,
                                       ForwardType type);
   ~ForwardSharedMemoryManager();
-  static std::string create_unique_name(int dp_group,
+  static std::string create_unique_name(const std::string& prefix,
+                                        int dp_group,
                                         int forward_type,
                                         int rank);
 

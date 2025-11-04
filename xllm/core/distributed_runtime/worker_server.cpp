@@ -141,6 +141,8 @@ void WorkerServer::create_spawn_server(int local_rank,
   const char* block_size_ptr = block_size_str.c_str();
   auto enable_shm_str = std::to_string(options.enable_shm());
   const char* enable_shm_ptr = enable_shm_str.c_str();
+  auto is_local_str = std::to_string(options.is_local());
+  const char* is_local_ptr = is_local_str.c_str();
   std::string spawn_worker_bin_path =
       options.spawn_worker_path() + "/spawn_worker";
   LOG(INFO) << "Spawn worker path: " << spawn_worker_bin_path;
@@ -153,6 +155,7 @@ void WorkerServer::create_spawn_server(int local_rank,
                         num_decoding_tokens_ptr,
                         block_size_ptr,
                         enable_shm_ptr,
+                        is_local_ptr,
                         nullptr};
   pid_t pid;
   posix_spawn_file_actions_init(&file_actions_);
@@ -181,14 +184,16 @@ void WorkerServer::prepare_shm(
     int dp_local_tp_size = parallel_args.world_size() / parallel_args.dp_size();
     int dp_group = parallel_args.rank() / dp_local_tp_size;
 
+    std::string name_prefix =
+        "xllm_" + net::extract_port(options.master_node_addr().value());
     string name = ForwardSharedMemoryManager::create_unique_name(
-        dp_group, FORWARD_RAW_INPUT_TYPE, parallel_args.rank());
+        name_prefix, dp_group, FORWARD_RAW_INPUT_TYPE, parallel_args.rank());
     input_shm_manager = std::make_unique<ForwardSharedMemoryManager>(
         name, PB_INPUT_SHM_SIZE, is_creator, FORWARD_RAW_INPUT_TYPE);
     LOG(INFO) << "Create input shared memory manager with name: " << name;
 
     name = ForwardSharedMemoryManager::create_unique_name(
-        dp_group, FORWARD_RAW_OUTPUT_TYPE, parallel_args.rank());
+        name_prefix, dp_group, FORWARD_RAW_OUTPUT_TYPE, parallel_args.rank());
     output_shm_manager = std::make_unique<ForwardSharedMemoryManager>(
         name, PB_OUTPUT_SHM_SIZE, is_creator, FORWARD_RAW_OUTPUT_TYPE);
     LOG(INFO) << "Create output shared memory manager with name: " << name;
@@ -204,31 +209,34 @@ WorkerServer::WorkerServer(int local_worker_idx,
                            WorkerType worker_type,
                            bool use_spawn_worker) {
   if (worker_type == WorkerType::LLM || worker_type == WorkerType::ELM) {
+    // TODO: Refactor these code later.
     if (use_spawn_worker) {
       // start worker in a spawn process(for offline inference worker.)
       create_spawn_server(
           local_worker_idx, master_node_addr, done, parallel_args, d, options);
       return;
-    }
+    } else {
+      std::unique_ptr<ForwardSharedMemoryManager> input_shm_manager = nullptr;
+      std::unique_ptr<ForwardSharedMemoryManager> output_shm_manager = nullptr;
+      prepare_shm(
+          parallel_args, options, input_shm_manager, output_shm_manager);
 
-    std::unique_ptr<ForwardSharedMemoryManager> input_shm_manager = nullptr;
-    std::unique_ptr<ForwardSharedMemoryManager> output_shm_manager = nullptr;
-    prepare_shm(parallel_args, options, input_shm_manager, output_shm_manager);
-    // start worker in a thread.
-    worker_thread_ =
-        std::make_unique<std::thread>(&WorkerServer::create_server,
-                                      this,
-                                      std::cref(options),
-                                      std::ref(done),
-                                      std::cref(master_node_addr),
-                                      std::cref(d),
-                                      parallel_args.world_size(),
-                                      parallel_args.rank(),
-                                      parallel_args.dp_size(),
-                                      local_worker_idx,
-                                      parallel_args.ep_size(),
-                                      std::move(input_shm_manager),
-                                      std::move(output_shm_manager));
+      // start worker in a thread.
+      worker_thread_ =
+          std::make_unique<std::thread>(&WorkerServer::create_server,
+                                        this,
+                                        std::cref(options),
+                                        std::ref(done),
+                                        std::cref(master_node_addr),
+                                        std::cref(d),
+                                        parallel_args.world_size(),
+                                        parallel_args.rank(),
+                                        parallel_args.dp_size(),
+                                        local_worker_idx,
+                                        parallel_args.ep_size(),
+                                        std::move(input_shm_manager),
+                                        std::move(output_shm_manager));
+    }
   } else {
     // TODO: support other model type later.
     LOG(ERROR) << "Unsupported model type: " << worker_type;

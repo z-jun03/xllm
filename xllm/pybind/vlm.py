@@ -42,6 +42,7 @@ class VLM:
         enable_schedule_overlap: bool = False,
         kv_cache_transfer_mode: str = 'PUSH',
         enable_shm: bool = False,
+        is_local: bool = True,
         **kwargs,
     ) -> None:
 
@@ -90,6 +91,7 @@ class VLM:
         options.enable_offline_inference = True
         options.spawn_worker_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         options.enable_shm = enable_shm
+        options.is_local = is_local
         self.master = VLMMaster(options)
 
     def finish(self):

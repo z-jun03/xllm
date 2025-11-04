@@ -42,6 +42,8 @@ DiTEngine::DiTEngine(const runtime::Options& options) : options_(options) {
   }
   const int32_t world_size = static_cast<int32_t>(devices.size());
 
+  CHECK(!options_.enable_shm()) << "Dit can not support enable_shm currently.";
+
   // create workers
   for (size_t i = 0; i < devices.size(); ++i) {
     const int32_t rank = static_cast<int32_t>(i);
