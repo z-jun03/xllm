@@ -29,7 +29,8 @@ class SpawnWorkerServer final {
                              int num_decoding_tokens,
                              int block_size,
                              bool enable_shm,
-                             bool is_local);
+                             bool is_local,
+                             const std::string& task_type);
 
   ~SpawnWorkerServer() = default;
 

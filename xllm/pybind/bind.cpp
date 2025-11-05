@@ -17,6 +17,7 @@ limitations under the License.
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
+#include <torch/python.h>
 
 #include "api_service/call.h"
 #include "core/common/options.h"

@@ -40,7 +40,8 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
                                      int num_decoding_tokens,
                                      int block_size,
                                      bool enable_shm,
-                                     bool is_local) {
+                                     bool is_local,
+                                     const std::string& task_type) {
   // TODO: pass whole xllm::runtime::Options here from main process.
   xllm::runtime::Options runner_options;
   runner_options.block_size(block_size)
@@ -49,7 +50,8 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
       .enable_offline_inference(true)
       .master_node_addr(master_node_addr)
       .enable_shm(enable_shm)
-      .is_local(is_local);
+      .is_local(is_local)
+      .task_type(task_type);
   FLAGS_enable_schedule_overlap = false;
   FLAGS_master_node_addr = master_node_addr;
   FLAGS_block_size = block_size;

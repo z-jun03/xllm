@@ -156,6 +156,7 @@ void WorkerServer::create_spawn_server(int local_rank,
                         block_size_ptr,
                         enable_shm_ptr,
                         is_local_ptr,
+                        options.task_type().c_str(),
                         nullptr};
   pid_t pid;
   posix_spawn_file_actions_init(&file_actions_);

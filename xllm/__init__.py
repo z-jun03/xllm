@@ -13,6 +13,7 @@ export_so_path = os.path.abspath(install_path)
 spec = importlib.util.spec_from_file_location("xllm_export", export_so_path)
 xllm_export = importlib.util.module_from_spec(spec)
 
+from xllm.pybind.embedding import Embedding
 from xllm.pybind.llm import LLM
 from xllm.pybind.vlm import VLM
 from xllm.pybind.args import ArgumentParser
@@ -21,6 +22,7 @@ from xllm_export import (LLMMaster, Options, RequestParams, RequestOutput,
 
 __all__ = [
     "ArgumentParser",
+    "Embedding",
     "LLM",
     "LLMMaster",
     "VLM",
