@@ -41,11 +41,12 @@ namespace xllm {
 LLMWorkerImpl::LLMWorkerImpl(const ParallelArgs& parallel_args,
                              const torch::Device& device,
                              const runtime::Options& options)
-    : WorkerImpl(parallel_args, device, options) {}
+    : WorkerImpl(parallel_args, device, options) {
+  device_.set_device();
+}
 
 bool LLMWorkerImpl::init_model(ModelContext& context) {
   CHECK(model_ == nullptr) << "Model is already initialized.";
-  device_.set_device();
 
   // Try to create a causal LM model
   model_ = create_llm_model(context);
@@ -67,7 +68,6 @@ bool LLMWorkerImpl::init_model(ModelContext& context) {
 
 std::optional<ForwardOutput> LLMWorkerImpl::step(
     const BatchedForwardInputs& inputs) {
-  device_.set_device();
   Timer timer;
   std::vector<torch::Tensor> flatten_tokens_micro_batches;
   std::vector<torch::Tensor> flatten_positions_micro_batches;

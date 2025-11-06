@@ -41,11 +41,12 @@ namespace xllm {
 DiTWorker::DiTWorker(const ParallelArgs& parallel_args,
                      const torch::Device& device,
                      const runtime::Options& options)
-    : device_(device), options_(options), parallel_args_(parallel_args) {}
+    : device_(device), options_(options), parallel_args_(parallel_args) {
+  device_.set_device();
+}
 
 bool DiTWorker::init_model(const std::string& model_weights_path) {
   CHECK(dit_model_ == nullptr) << "Model is already initialized.";
-  device_.set_device();
 
   auto loader = std::make_unique<DiTModelLoader>(model_weights_path);
   dtype_ = util::parse_dtype(loader->get_torch_dtype(), device_);
@@ -80,7 +81,6 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
 }
 
 std::optional<DiTForwardOutput> DiTWorker::step(const DiTForwardInput& inputs) {
-  device_.set_device();
   Timer timer;
 
   auto output = dit_model_executor_->forward(inputs.to(device_, dtype_));

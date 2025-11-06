@@ -18,9 +18,15 @@ limitations under the License.
 #include <thread>
 
 namespace xllm {
-ThreadPool::ThreadPool(size_t num_threads) : queues_(num_threads) {
+ThreadPool::ThreadPool(size_t num_threads) : ThreadPool(num_threads, nullptr) {}
+
+ThreadPool::ThreadPool(size_t num_threads, Runnable init_func)
+    : queues_(num_threads) {
   for (size_t i = 0; i < num_threads; ++i) {
-    threads_.emplace_back([this, i]() { internal_loop(i); });
+    threads_.emplace_back(
+        [this, i, init_func = std::move(init_func)]() mutable {
+          internal_loop(i, std::move(init_func));
+        });
   }
 }
 
@@ -60,7 +66,11 @@ void ThreadPool::schedule_with_tid(Runnable runnable, size_t tid) {
   queues_[tid].enqueue(std::move(runnable));
 }
 
-void ThreadPool::internal_loop(size_t index) {
+void ThreadPool::internal_loop(size_t index, Runnable&& init_func) {
+  if (init_func != nullptr) {
+    init_func();
+  }
+
   while (true) {
     Runnable runnable;
     queues_[index].wait_dequeue(runnable);

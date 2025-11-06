@@ -40,6 +40,7 @@ class ThreadPool final {
   ThreadPool& operator=(ThreadPool&&) = delete;
 
   explicit ThreadPool(size_t num_threads);
+  explicit ThreadPool(size_t num_threads, Runnable init_func);
 
   // schedule a runnable to be executed
   int32_t schedule(Runnable runnable);
@@ -55,7 +56,7 @@ class ThreadPool final {
   size_t size() { return threads_.size(); }
 
  private:
-  void internal_loop(size_t tid);
+  void internal_loop(size_t tid, Runnable&& init_func);
 
   std::vector<std::thread> threads_;
   std::vector<moodycamel::BlockingConcurrentQueue<Runnable>> queues_;

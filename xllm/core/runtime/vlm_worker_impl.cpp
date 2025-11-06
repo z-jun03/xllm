@@ -38,12 +38,12 @@ namespace xllm {
 VLMWorkerImpl::VLMWorkerImpl(const ParallelArgs& parallel_args,
                              const torch::Device& device,
                              const runtime::Options& options)
-    : WorkerImpl(parallel_args, device, options) {}
+    : WorkerImpl(parallel_args, device, options) {
+  device_.set_device();
+}
 
 bool VLMWorkerImpl::init_model(ModelContext& context) {
   CHECK(model_ == nullptr) << "Model is already initialized.";
-
-  device_.set_device();
 
   // initialize model
   context.set_image_embedding_mode(false);
@@ -56,7 +56,6 @@ bool VLMWorkerImpl::init_model(ModelContext& context) {
 
 std::optional<ForwardOutput> VLMWorkerImpl::step(
     const BatchedForwardInputs& inputs) {
-  device_.set_device();
   Timer timer;
   // TODO guojinrong, to adapt multi stream parallel later
   // all tensors should be on the same device as model

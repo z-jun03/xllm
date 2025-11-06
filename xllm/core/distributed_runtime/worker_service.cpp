@@ -40,6 +40,8 @@ WorkerService::WorkerService(runtime::Options options,
   device_.set_device();
   device_.init_device_context();
   stream_ = device_.get_stream_from_pool();
+  threadpool_ = std::make_unique<ThreadPool>(
+      4, [this]() mutable { device_.set_device(); });
 }
 
 WorkerService::WorkerService(runtime::Options options,
@@ -52,6 +54,8 @@ WorkerService::WorkerService(runtime::Options options,
   device_.set_device();
   device_.init_device_context();
   stream_ = device_.get_stream_from_pool();
+  threadpool_ = std::make_unique<ThreadPool>(
+      4, [this]() mutable { device_.set_device(); });
 }
 
 WorkerService::~WorkerService() = default;
@@ -72,7 +76,6 @@ void WorkerService::step(BatchedForwardInputs& batched_fwd_inputs,
                          torch::Tensor& src_seq_idxes,
                          torch::Tensor& out_tokens,
                          torch::Tensor& out_logprobs) {
-  device_.set_device();
   // execute model
   auto future = worker_->step_async(batched_fwd_inputs);
 
@@ -250,7 +253,7 @@ void WorkerService::InitModel(::google::protobuf::RpcController* controller,
                               const proto::ModelPath* request,
                               proto::Status* response,
                               ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, request, response, done]() mutable {
+  threadpool_->schedule([this, controller, request, response, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     auto model_weights_path = request->model_weights_path();
     auto init_future = worker_->init_model_async(model_weights_path);
@@ -270,7 +273,7 @@ void WorkerService::ProcessGroupTest(
     const proto::Empty* request,
     proto::Status* response,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, request, response, done]() mutable {
+  threadpool_->schedule([this, controller, request, response, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     auto future = worker_->process_group_test_async();
     std::move(future).get();
@@ -284,7 +287,7 @@ void WorkerService::ProfileDeviceMemory(
     const proto::Empty* request,
     proto::DeviceMemory* response,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, request, response, done]() mutable {
+  threadpool_->schedule([this, controller, request, response, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     auto future = worker_->estimate_kv_cache_capacity_async();
     std::tuple<int64_t, int64_t> result = std::move(future).get();
@@ -299,7 +302,7 @@ void WorkerService::AllocateKVCache(
     const proto::KVCacheShape* request,
     proto::Status* response,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, request, response, done]() mutable {
+  threadpool_->schedule([this, controller, request, response, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     std::vector<std::vector<int64_t>> kv_cache_shape;
     kv_cache_shape.reserve(2);
@@ -319,7 +322,7 @@ void WorkerService::AllocateContinuousKVCache(
     const proto::XTensorOptionsVec* request,
     proto::Status* response,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, request, response, done]() mutable {
+  threadpool_->schedule([this, controller, request, response, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     XTensor::Options key_options;
     XTensor::Options value_options;
@@ -350,7 +353,7 @@ void WorkerService::AllocateKVCacheWithTransfer(
     const proto::AllocateKVCacheWithTransferRequest* req,
     proto::Status* resp,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     uint64_t kv_cache_size = req->kv_cache_size();
     std::vector<std::vector<int64_t>> kv_cache_shape;
@@ -373,7 +376,7 @@ void WorkerService::GetCacheInfo(::google::protobuf::RpcController* controller,
                                  const proto::Empty* req,
                                  proto::CacheInfo* resp,
                                  ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     uint64_t cluster_id;
     std::string addr;
@@ -392,7 +395,7 @@ void WorkerService::PullKVCache(::google::protobuf::RpcController* controller,
                                 const proto::PullKVCacheRequest* req,
                                 proto::Status* resp,
                                 ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     uint64_t src_cluster_id = req->cluster_id();
     std::string addr = req->addr();
@@ -433,7 +436,7 @@ void WorkerService::GetDeviceInfo(::google::protobuf::RpcController* controller,
                                   const proto::Empty* req,
                                   proto::DeviceInfo* resp,
                                   ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     std::string device_ip;
     uint16_t listen_port;
@@ -448,7 +451,7 @@ void WorkerService::LinkCluster(::google::protobuf::RpcController* controller,
                                 const proto::ClusterInfo* req,
                                 proto::Status* resp,
                                 ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     std::vector<uint64_t> cluster_ids(req->cluster_ids().begin(),
                                       req->cluster_ids().end());
@@ -467,7 +470,7 @@ void WorkerService::UnlinkCluster(::google::protobuf::RpcController* controller,
                                   const proto::ClusterInfo* req,
                                   proto::Status* resp,
                                   ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     std::vector<uint64_t> cluster_ids(req->cluster_ids().begin(),
                                       req->cluster_ids().end());
@@ -488,11 +491,11 @@ void WorkerService::ExecuteModel(
     const proto::BatchedForwardInputs* pb_batched_fwd_inputs,
     proto::ForwardOutput* pb_forward_output,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this,
-                        controller,
-                        pb_batched_fwd_inputs,
-                        pb_forward_output,
-                        done]() mutable {
+  threadpool_->schedule([this,
+                         controller,
+                         pb_batched_fwd_inputs,
+                         pb_forward_output,
+                         done]() mutable {
     brpc::ClosureGuard done_guard(done);
     Timer timer;
     // convert proto::BatchedForwardInputs to BatchedForwardInputs
@@ -574,9 +577,8 @@ void WorkerService::GetLastStepResult(
     const proto::Empty* req,
     proto::ForwardOutput* pb_forward_output,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule(
+  threadpool_->schedule(
       [this, controller, req, pb_forward_output, done]() mutable {
-        device_.set_device();
         brpc::ClosureGuard done_guard(done);
 
         auto future = worker_->get_last_step_result_async();
@@ -642,7 +644,7 @@ void WorkerService::GetActiveActivationMemory(
     const proto::Empty* req,
     proto::ActivationMemory* resp,
     ::google::protobuf::Closure* done) {
-  threadpool_.schedule([this, controller, req, resp, done]() mutable {
+  threadpool_->schedule([this, controller, req, resp, done]() mutable {
     brpc::ClosureGuard done_guard(done);
     auto future = worker_->get_active_activation_memory_async();
     int64_t active_activation_memory = std::move(future).get();
