@@ -46,13 +46,6 @@ class EmbeddingLMImpl : public EmbeddingLM {
   EmbeddingLMImpl(Model model, const torch::TensorOptions& options)
       : model_(std::move(model)), options_(options) {}
 
-  torch::Tensor forward(const torch::Tensor& tokens,
-                        const torch::Tensor& positions,
-                        std::vector<KVCache>& kv_caches,
-                        const ModelInputParams& parameters) override {
-    return model_->forward(tokens, positions, kv_caches, parameters);
-  }
-
   torch::Tensor logits(const torch::Tensor& hidden_states,
                        const torch::Tensor& seleted_idxes) override {
     return model_->logits(hidden_states, seleted_idxes);
