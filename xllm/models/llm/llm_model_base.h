@@ -156,7 +156,8 @@ template <typename DecoderLayerType>
 class LlmModelImplBase : public torch::nn::Module {
  public:
   // mode type: qwen2, qwen3 .etc
-  LlmModelImplBase(const std::string& model_type, const ModelArgs& args) {
+  LlmModelImplBase(const std::string& model_type, const ModelArgs& args)
+      : model_type_(model_type) {
     InterruptionBus::get_instance().subscribe([this](bool interrupted) {
       this->layer_forward_interrupted_ = interrupted;
     });
