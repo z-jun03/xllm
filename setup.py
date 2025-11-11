@@ -389,7 +389,13 @@ class BuildDistWheel(bdist_wheel):
         build_ext_cmd = self.get_finalized_command('build_ext')
         build_ext_cmd.device = self.device
         build_ext_cmd.arch = self.arch
-        self.run_command('build_ext')
+
+        print("🔨 build project...")
+        self.run_command('build')
+
+        print("🧪 testing UT...")
+        self.run_command('test')
+
         if self.arch == 'arm':
             ext_path = get_base_dir() + "/build/lib.linux-aarch64-cpython-311/"
         else:

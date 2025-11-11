@@ -66,6 +66,7 @@ jobs:
             ".github/**.yaml"
             "cibuild/**.sh"
             "setup.py"
+            "examples/generate.py"
           )
           changed_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
           requires_approval="false"
@@ -124,4 +125,4 @@ jobs:
       timeout-minutes: 60
       run: |
         chmod +x ./cibuild/build_npu.sh
-        bash cibuild/build_npu.sh 'pip install pre-commit -i https://pypi.tuna.tsinghua.edu.cn/simple; python setup.py build; python setup.py test'
+        bash cibuild/build_npu.sh 'pip install pre-commit -i https://pypi.tuna.tsinghua.edu.cn/simple; python setup.py bdist_wheel; pip install dist/* --force-reinstall; python examples/generate.py --model="/export/home/models/Qwen2-7B-Instruct" --devices="npu:7"'
