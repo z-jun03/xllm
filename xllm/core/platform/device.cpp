@@ -101,7 +101,7 @@ int64_t Device::free_memory() { return get_device_mem().free_memory; }
 
 int Device::synchronize_default_stream() {
 #if defined(USE_NPU)
-  c10_npu::getCurrentNPUStream(index()).synchronize();
+  return aclrtSynchronizeStream(c10_npu::getCurrentNPUStream(index()).stream());
 #elif defined(USE_MLU)
   torch_mlu::getCurrentMLUStream(index()).synchronize();
 #elif defined(USE_CUDA)

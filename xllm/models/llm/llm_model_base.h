@@ -96,7 +96,6 @@ class LlmDecoderLayerImplBase : public torch::nn::Module {
                                 int node_id,
                                 std::vector<aclrtEvent*> event,
                                 std::vector<std::atomic<bool>*> event_flag) {
-#if defined(USE_NPU)
     auto micro_batch_num = x.size();
     for (auto i = 0; i < micro_batch_num; ++i) {
       if (input_params[i].src_block_indices.numel() > 0) {
@@ -108,7 +107,7 @@ class LlmDecoderLayerImplBase : public torch::nn::Module {
                     0);
       }
     }
-#endif
+
     return decoder_layer_(x,
                           cos_pos,
                           sin_pos,

@@ -960,7 +960,8 @@ void ContinuousScheduler::generate() {
   while (num_pending_requests() > 0 || !batch_empty ||
          request_queue_.size() > 0) {
     // build a batch of requests/sequences
-    auto batch = prepare_batch();
+    const auto timeout = absl::Milliseconds(500);
+    std::vector<Batch> batch = schedule_request(timeout);
     batch_empty = true;
     for (auto& b : batch) {
       batch_empty &= b.empty();
