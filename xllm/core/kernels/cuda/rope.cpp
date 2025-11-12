@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "cuda_ops_api.h"
+#include "function_factory.h"
 
 namespace xllm::kernel::cuda {
 
@@ -26,21 +27,7 @@ void apply_rope_pos_ids_cos_sin_cache(torch::Tensor q,
   q = q.view({q.size(0), -1, head_dim});
   k = k.view({k.size(0), -1, head_dim});
 
-  auto lib =
-      torch::DynamicLibrary(path_to_uri_so_lib("rope").c_str(), nullptr, true);
-  std::string schema_name = "rope::apply_rope_pos_ids_cos_sin_cache";
-
-  auto apply_rope_pos_ids_cos_sin_cache_func =
-      torch::Dispatcher::singleton()
-          .findSchemaOrThrow(schema_name.c_str(), "")
-          .typed<void(torch::Tensor,
-                      torch::Tensor,
-                      torch::Tensor,
-                      torch::Tensor,
-                      torch::Tensor,
-                      torch::Tensor,
-                      bool)>();
-  apply_rope_pos_ids_cos_sin_cache_func.call(
+  FunctionFactory::get_instance().rope_func("rope").call(
       q, k, q, k, cos_sin_cache, pos_ids, interleave);
 }
 

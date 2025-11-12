@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "cuda_ops_api.h"
+#include "function_factory.h"
 
 namespace xllm::kernel::cuda {
 
@@ -49,84 +50,44 @@ void batch_decode(torch::Tensor float_workspace_buffer,
   torch::Tensor empty_kv_data =
       torch::empty({0}, torch::TensorOptions().dtype(k_cache.scalar_type()));
 
-  auto lib =
-      torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
-  std::string plan_schema_name = uri + "::plan";
-  std::string run_schema_name = uri + "::run";
+  torch::Tensor plan_info =
+      FunctionFactory::get_instance().decode_plan_func(uri).call(
+          float_workspace_buffer,
+          int_workspace_buffer,
+          page_locked_int_workspace_buffer,
+          paged_kv_indptr_host,
+          batch_size,
+          query.size(1),    // num_qo_heads
+          k_cache.size(2),  // num_kv_heads
+          k_cache.size(1),  // block_size
+          enable_cuda_graph,
+          window_size_left,
+          /*logits_soft_cap=*/0.0,
+          query.size(-1),    // head_dim_qk
+          v_cache.size(-1),  // head_dim_vo
+          empty_q_data,
+          empty_kv_data);
 
-  auto plan_func = torch::Dispatcher::singleton()
-                       .findSchemaOrThrow(plan_schema_name.c_str(), "")
-                       .typed<torch::Tensor(torch::Tensor,
-                                            torch::Tensor,
-                                            torch::Tensor,
-                                            torch::Tensor,
-                                            int64_t,
-                                            int64_t,
-                                            int64_t,
-                                            int64_t,
-                                            bool,
-                                            int64_t,
-                                            double,
-                                            int64_t,
-                                            int64_t,
-                                            torch::Tensor,
-                                            torch::Tensor)>();
-  torch::Tensor plan_info = plan_func.call(float_workspace_buffer,
-                                           int_workspace_buffer,
-                                           page_locked_int_workspace_buffer,
-                                           paged_kv_indptr_host,
-                                           batch_size,
-                                           query.size(1),    // num_qo_heads
-                                           k_cache.size(2),  // num_kv_heads
-                                           k_cache.size(1),  // block_size
-                                           enable_cuda_graph,
-                                           window_size_left,
-                                           /*logits_soft_cap=*/0.0,
-                                           query.size(-1),    // head_dim_qk
-                                           v_cache.size(-1),  // head_dim_vo
-                                           empty_q_data,
-                                           empty_kv_data);
-
-  auto run_func = torch::Dispatcher::singleton()
-                      .findSchemaOrThrow(run_schema_name.c_str(), "")
-                      .typed<void(torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  torch::Tensor,
-                                  std::optional<torch::Tensor>,
-                                  int64_t,
-                                  int64_t,
-                                  bool,
-                                  std::optional<torch::Tensor>,
-                                  double,
-                                  double,
-                                  double,
-                                  double)>();
-  run_func.call(float_workspace_buffer,
-                int_workspace_buffer,
-                plan_info,
-                query,
-                k_cache,
-                v_cache,
-                paged_kv_indptr,
-                paged_kv_indices,
-                paged_kv_last_page_len,
-                output,
-                output_lse,
-                /*kv_layout_code=*/0,  // NHD layout
-                window_size_left,
-                support_pdl(),
-                /*maybe_alibi_slopes=*/std::optional<torch::Tensor>(),
-                /*logits_soft_cap=*/0.0,
-                sm_scale,
-                /*rope_rcp_scale=*/1.0,
-                /*rope_rcp_theta=*/10000.0);
+  FunctionFactory::get_instance().decode_run_func(uri).call(
+      float_workspace_buffer,
+      int_workspace_buffer,
+      plan_info,
+      query,
+      k_cache,
+      v_cache,
+      paged_kv_indptr,
+      paged_kv_indices,
+      paged_kv_last_page_len,
+      output,
+      output_lse,
+      /*kv_layout_code=*/0,  // NHD layout
+      window_size_left,
+      support_pdl(),
+      /*maybe_alibi_slopes=*/std::optional<torch::Tensor>(),
+      /*logits_soft_cap=*/0.0,
+      sm_scale,
+      /*rope_rcp_scale=*/1.0,
+      /*rope_rcp_theta=*/10000.0);
 }
 
 }  // namespace xllm::kernel::cuda

@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "cuda_ops_api.h"
+#include "function_factory.h"
 
 namespace xllm::kernel::cuda {
 
@@ -26,16 +27,7 @@ void act_and_mul(torch::Tensor out,
   }
 
   std::string uri = act_mode + "_and_mul";
-
-  auto lib =
-      torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
-  std::string schema_name = uri + "::" + uri;
-
-  auto act_and_mul_func =
-      torch::Dispatcher::singleton()
-          .findSchemaOrThrow(schema_name.c_str(), "")
-          .typed<void(torch::Tensor&, torch::Tensor&, bool)>();
-
-  act_and_mul_func.call(out, input, support_pdl());
+  FunctionFactory::get_instance().act_and_mul(uri).call(
+      out, input, support_pdl());
 }
 }  // namespace xllm::kernel::cuda
