@@ -41,7 +41,8 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
                                      int block_size,
                                      bool enable_shm,
                                      bool is_local,
-                                     const std::string& task_type) {
+                                     const std::string& task_type,
+                                     const std::string& worker_type) {
   // TODO: pass whole xllm::runtime::Options here from main process.
   xllm::runtime::Options runner_options;
   runner_options.block_size(block_size)
@@ -71,7 +72,7 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
                              parallel_args,
                              device,
                              runner_options,
-                             WorkerType::LLM,
+                             worker_type,
                              false);
 }
 

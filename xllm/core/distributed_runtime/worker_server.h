@@ -69,7 +69,8 @@ class WorkerServer {
                            std::atomic<bool>& done,
                            const ParallelArgs& parallel_args,
                            const torch::Device& d,
-                           const runtime::Options& options);
+                           const runtime::Options& options,
+                           WorkerType& worker_type);
 
   void create_shared_memory_polling(
       std::unique_ptr<ForwardSharedMemoryManager> input_shm_manager,

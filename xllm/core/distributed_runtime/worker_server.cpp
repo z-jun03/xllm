@@ -130,7 +130,8 @@ void WorkerServer::create_spawn_server(int local_rank,
                                        std::atomic<bool>& done,
                                        const ParallelArgs& parallel_args,
                                        const torch::Device& d,
-                                       const runtime::Options& options) {
+                                       const runtime::Options& options,
+                                       WorkerType& worker_type) {
   auto local_rank_str = std::to_string(local_rank);
   const char* local_rank_ptr = local_rank_str.c_str();
   auto global_rank_str = std::to_string(parallel_args.rank());
@@ -147,6 +148,7 @@ void WorkerServer::create_spawn_server(int local_rank,
   const char* enable_shm_ptr = enable_shm_str.c_str();
   auto is_local_str = std::to_string(options.is_local());
   const char* is_local_ptr = is_local_str.c_str();
+  const char* worker_type_ptr = worker_type.to_string();
   std::string spawn_worker_bin_path =
       options.spawn_worker_path() + "/spawn_worker";
   LOG(INFO) << "Spawn worker path: " << spawn_worker_bin_path;
@@ -161,6 +163,7 @@ void WorkerServer::create_spawn_server(int local_rank,
                         enable_shm_ptr,
                         is_local_ptr,
                         options.task_type().c_str(),
+                        worker_type_ptr,
                         nullptr};
   pid_t pid;
   posix_spawn_file_actions_init(&file_actions_);
@@ -217,8 +220,13 @@ WorkerServer::WorkerServer(int local_worker_idx,
     // TODO: Refactor these code later.
     if (use_spawn_worker) {
       // start worker in a spawn process(for offline inference worker.)
-      create_spawn_server(
-          local_worker_idx, master_node_addr, done, parallel_args, d, options);
+      create_spawn_server(local_worker_idx,
+                          master_node_addr,
+                          done,
+                          parallel_args,
+                          d,
+                          options,
+                          worker_type);
       return;
     } else {
       // worker process should handle SIGTREM and SIGINT signals.

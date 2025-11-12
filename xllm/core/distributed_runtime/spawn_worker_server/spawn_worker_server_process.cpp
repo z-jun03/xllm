@@ -31,10 +31,11 @@ limitations under the License.
 // @enable_shm
 // @is_local
 // @task_type
+// @worker_type
 int main(int argc, char* argv[]) {
-  if (argc < 10) {
+  if (argc < 11) {
     LOG(ERROR)
-        << "Spwan worker process receive wrong args. Need 10 args, receive "
+        << "Spwan worker process receive wrong args. Need 11 args, receive "
         << argc;
     return 1;
   }
@@ -56,6 +57,7 @@ int main(int argc, char* argv[]) {
   int enable_shm = atoi(argv[8]);
   int is_local = atoi(argv[9]);
   std::string task_type = std::string(argv[10]);
+  std::string worker_type = std::string(argv[11]);
 
   LOG(INFO) << "Spwan worker: "
             << "master_node_addr = " << master_node_addr
@@ -66,7 +68,8 @@ int main(int argc, char* argv[]) {
             << ", block_size = " << block_size
             << ", enable_shm = " << (enable_shm > 0)
             << ", is_local = " << (is_local > 0)
-            << ", task_type = " << task_type << "\n";
+            << ", task_type = " << task_type
+            << ", worker_type = " << worker_type << "\n";
 
   xllm::SpawnWorkerServer worker(master_node_addr,
                                  local_rank,
@@ -77,7 +80,8 @@ int main(int argc, char* argv[]) {
                                  block_size,
                                  enable_shm > 0,
                                  is_local > 0,
-                                 task_type);
+                                 task_type,
+                                 worker_type);
 
   worker.run();
 

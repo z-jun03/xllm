@@ -30,7 +30,8 @@ class SpawnWorkerServer final {
                              int block_size,
                              bool enable_shm,
                              bool is_local,
-                             const std::string& task_type);
+                             const std::string& task_type,
+                             const std::string& worker_type);
 
   ~SpawnWorkerServer() = default;
 
