@@ -22,6 +22,7 @@ limitations under the License.
 #include "api_service/call.h"
 #include "core/common/options.h"
 #include "core/common/types.h"
+#include "core/framework/request/mm_data.h"
 #include "core/framework/request/request_output.h"
 #include "core/framework/request/request_params.h"
 #include "core/runtime/llm_master.h"
@@ -232,6 +233,43 @@ PYBIND11_MODULE(xllm_export, m) {
       .def_readwrite("role", &MMChatMessage::role)
       .def_readwrite("content", &MMChatMessage::content);
 
+  // 10. export MMType
+  py::enum_<MMType::Value>(m, "MMType")
+      .value("NONE", MMType::Value::NONE)
+      .value("IMAGE", MMType::Value::IMAGE)
+      .value("VIDEO", MMType::Value::VIDEO)
+      .value("AUDIO", MMType::Value::AUDIO)
+      .value("EMBEDDING", MMType::EMBEDDING)
+      .export_values();
+
+  // 11. export MMData
+  py::class_<MMData>(m, "MMData")
+      .def(py::init<int, const MMDict&>(), py::arg("ty"), py::arg("data"))
+      .def("get",
+           [](const MMData& self, const MMKey& key) -> py::object {
+             auto value = self.get<torch::Tensor>(key);
+             if (value.has_value()) {
+               return py::cast(value.value());
+             }
+             return py::none();
+           })
+      .def("get_list",
+           [](const MMData& self, const MMKey& key) -> py::object {
+             auto value = self.get<std::vector<torch::Tensor>>(key);
+             if (value.has_value()) {
+               return py::cast(value.value());
+             }
+             return py::none();
+           })
+      .def_readwrite("ty", &MMData::ty_)
+      .def_readwrite("data", &MMData::data_)
+      .def("__repr__", [](const MMData& self) {
+        std::stringstream ss;
+        ss << "MMData(" << static_cast<int>(self.ty_) << ": "
+           << self.data_.size() << " items)";
+        return ss.str();
+      });
+
   // 10. export VLMMaster
   py::class_<VLMMaster>(m, "VLMMaster")
       .def(py::init<const Options&>(),
@@ -241,6 +279,13 @@ PYBIND11_MODULE(xllm_export, m) {
            py::overload_cast<const std::vector<MMChatMessage>&,
                              RequestParams,
                              OutputCallback>(&VLMMaster::handle_request),
+           py::call_guard<py::gil_scoped_release>())
+      .def("handle_batch_request",
+           py::overload_cast<const std::vector<std::string>&,
+                             const std::vector<MMData>&,
+                             const std::vector<RequestParams>&,
+                             BatchOutputCallback>(
+               &VLMMaster::handle_batch_request),
            py::call_guard<py::gil_scoped_release>())
       .def("generate",
            &VLMMaster::generate,

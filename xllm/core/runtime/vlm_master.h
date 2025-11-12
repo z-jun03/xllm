@@ -46,6 +46,7 @@ class VLMMaster : public Master {
   explicit VLMMaster(const Options& options);
   ~VLMMaster();
 
+  // completion
   void handle_request(const std::string& prompt,
                       const MMData& mm_data,
                       RequestParams sp,
@@ -71,14 +72,14 @@ class VLMMaster : public Master {
   // batch completion
   void handle_batch_request(const std::vector<std::string>& prompts,
                             const std::vector<MMData>& mm_datas,
-                            std::vector<RequestParams> sps,
+                            const std::vector<RequestParams>& sps,
                             BatchOutputCallback callback);
 
   // batch chat
   void handle_batch_request(
       const std::vector<std::vector<Message>>& conversations,
       const std::vector<MMData>& mm_datas,
-      std::vector<RequestParams> sps,
+      const std::vector<RequestParams>& sps,
       BatchOutputCallback callback);
 
   // start the handling loop

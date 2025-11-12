@@ -1,36 +1,62 @@
-# python examples/generate_vlm.py --model='/path/models/Qwen2.5-VL-7B' --devices='npu:0'
-# python generate_vlm.py --model='/path/models/Qwen2.5-VL-7B' --devices='npu:0,npu:1'
+# python generate_vlm.py --model /path/to/Qwen2.5-VL-7B-Instruct/ --disable_prefix_cache --disable_chunked_prefill --max_seqs_per_batch 4
 
 import os
 import signal
-from xllm import ArgumentParser, VLM, RequestParams, MMChatMessage, MMInputData
+
+from xllm import ArgumentParser, VLM, RequestParams
+from xllm_export import MMType, MMData
+
+from PIL import Image
+from transformers import AutoImageProcessor
 
 # Create an VLM.
 parser = ArgumentParser()
-vlm = VLM(**vars(parser.parse_args()))
+args = parser.parse_args()
+
+vlm = VLM(**vars(args))
+processor = AutoImageProcessor.from_pretrained(args.model, trust_remote_code=True)
+
+questions = ["简单介绍下图片"]
+prompts = [
+    (
+        "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+        "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
+        f"{question}<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+    for question in questions
+]
+
+paths = ["00307664d4ce393b.png"]
+images = []
+for path in paths:
+    images.append(Image.open(path).convert("RGB"))
+
+multi_modal_datas = []
+for idx in range(len(images)):
+    print(f"Processing image: {paths[idx]}")
+    image = images[idx]
+
+    data = processor.preprocess([image], return_tensors="pt").data
+    mm_data = {
+        "pixel_values": data['pixel_values'],
+        "image_grid_thw": data['image_grid_thw'],            
+    }
+    multi_modal_datas.append(MMData(MMType.IMAGE, mm_data))
+
 
 # Create a reqeust params, include sampling params
 request_params = RequestParams()
-request_params.temperature = 0.8
-request_params.top_p = 0.95
-request_params.max_tokens = 100
+request_params.temperature = 0
+request_params.max_tokens = 1024
 
-# input_data
-mm_input_data1 = MMInputData()
-mm_input_data1.type = 'text'
-mm_input_data1.text = 'Please briefly introduce this picture.'
-mm_input_data2 = MMInputData()
-mm_input_data2.type = 'image_url'
-mm_input_data2.image_url = 'https://img2.baidu.com/it/u=2376489989,3127732063&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=657'
-mm_chat_msg = MMChatMessage()
-mm_chat_msg.role = 'user'
-mm_chat_msg.content = [mm_input_data1, mm_input_data2]
+outputs = vlm.generate(prompts, multi_modal_datas, request_params, True)
 
-output = vlm.generate(mm_chat_msg, request_params, True)
-
-prompt = output.prompt
-generated_text = output.outputs[0].text
-print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
 vlm.finish()
+
 

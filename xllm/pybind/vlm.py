@@ -2,10 +2,11 @@ import os
 import signal
 import time
 from . import util
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 
 from xllm_export import (VLMMaster, Options, RequestOutput,
-                         RequestParams, MMInputData, MMChatMessage)
+                         RequestParams, MMInputData, MMChatMessage,
+                         MMType, MMData)
 
 class VLM:
     def __init__(
@@ -104,40 +105,41 @@ class VLM:
         except Exception as e:
             pass
 
-    # NOTE: support one request currently
-    #
     def generate(
         self,
-        input_data: Union[MMChatMessage, List[MMChatMessage]],
-        request_params: RequestParams = None,
-        wait_schedule_done: bool = True,
+        prompts: List[str],
+        multi_modal_data: List[MMData],
+        request_params: Optional[Union[RequestParams, List[RequestParams]]] = None,
+        wait_for_schedule: bool = True,
     ) -> List[RequestOutput]:
+        # use default sampling parameters if not provided
         if request_params is None:
             request_params = RequestParams()
-        if isinstance(input_data, MMChatMessage):
-            input_data = [input_data]
+        if isinstance(request_params, RequestParams):
+            request_params = [request_params]
 
-        outputs = [None]
-        def callback(output: RequestOutput) -> bool:
-            outputs[0] = output
+        outputs = [None] * len(prompts)
+        def callback(index: int, output: RequestOutput) -> bool:
+            outputs[index] = output
             return True
-
-        # schedule all requests
-        self.master.handle_request(
-            input_data, request_params, callback
+        # schedule the batch requests
+        future = self.master.handle_batch_request(
+            prompts, multi_modal_data, request_params, callback
         )
 
-        # TODO: add wait later
-        if wait_schedule_done:
+        # wait for batch request to be scheduled
+        if wait_for_schedule:
             pass
 
-        # generate
+        # run until all scheduled requsts complete
         self.master.generate()
 
-        # wait async output
-        while outputs[0] is None:
-            time.sleep(0.01)
-        if outputs[0].status is not None and not outputs[0].status.ok:
-            raise ValidationError(outputs[0].status.code, outputs[0].status.message)
-
-        return outputs[0]
+        # throw an exception if there is any error
+        for index, output in enumerate(outputs):
+            if output is None:
+                raise RuntimeError("Request failed, no output received")
+            if output.status is not None and not output.status.ok:
+                raise ValidationError(output.status.code, output.status.message)
+            # carry over the prompt to the output
+            output.prompt = prompts[index]
+        return outputs

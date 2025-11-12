@@ -124,74 +124,6 @@ VLMMaster::~VLMMaster() {
   }
 }
 
-void VLMMaster::handle_request(const std::vector<Message>& messages,
-                               const MMInput& mm_inputs,
-                               RequestParams sp,
-                               OutputCallback callback) {
-  MMData mm_data;
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << " image processor process failed";
-  }
-
-  this->handle_request(messages, mm_data, sp, callback);
-}
-
-void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
-                                     const std::vector<MMData>& mm_datas,
-                                     std::vector<RequestParams> sps,
-                                     BatchOutputCallback callback) {
-  CHECK(prompts.size() == sps.size() || sps.size() == 1)
-      << "Number of prompts and sampling parameters should be the same";
-
-  const size_t num_requests = prompts.size();
-  for (size_t i = 0; i < num_requests; ++i) {
-    handle_request(std::move(prompts[i]),
-                   std::move(mm_datas[i]),
-                   // the sampling parameter may be shared
-                   sps.size() == 1 ? sps[0] : std::move(sps[i]),
-                   [i, callback](const RequestOutput& output) {
-                     output.log_request_status();
-                     return callback(i, output);
-                   });
-  }
-}
-
-void VLMMaster::handle_batch_request(
-    const std::vector<std::vector<Message>>& conversations,
-    const std::vector<MMData>& mm_datas,
-    std::vector<RequestParams> sps,
-    BatchOutputCallback callback) {
-  CHECK(conversations.size() == sps.size() || sps.size() == 1)
-      << "Number of conversations and sampling parameters should be the same";
-
-  const size_t num_requests = conversations.size();
-  for (size_t i = 0; i < num_requests; ++i) {
-    handle_request(std::move(conversations[i]),
-                   std::move(mm_datas[i]),
-                   // the sampling parameter may be shared
-                   sps.size() == 1 ? sps[0] : std::move(sps[i]),
-                   [i, callback](const RequestOutput& output) {
-                     output.log_request_status();
-                     return callback(i, output);
-                   });
-  }
-}
-
-void VLMMaster::handle_request(const std::vector<MMChatMessage>& raw_input_data,
-                               RequestParams sp,
-                               OutputCallback callback) {
-  static MMInputHelper helper;
-  std::vector<Message> messages;
-  MMInput mm_inputs;
-
-  if (!helper.trans(raw_input_data, messages, mm_inputs.items_)) {
-    LOG(ERROR) << "MMInputHelper trans failed, ingnore this input.";
-    return;
-  }
-
-  handle_request(std::move(messages), std::move(mm_inputs), sp, callback);
-}
-
 void VLMMaster::handle_request(const std::string& prompt,
                                const MMData& mm_data,
                                RequestParams sp,
@@ -233,6 +165,18 @@ void VLMMaster::handle_request(const std::string& prompt,
 }
 
 void VLMMaster::handle_request(const std::vector<Message>& messages,
+                               const MMInput& mm_inputs,
+                               RequestParams sp,
+                               OutputCallback callback) {
+  MMData mm_data;
+  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
+    LOG(ERROR) << " image processor process failed";
+  }
+
+  this->handle_request(messages, mm_data, sp, callback);
+}
+
+void VLMMaster::handle_request(const std::vector<Message>& messages,
                                const MMData& mm_data,
                                RequestParams sp,
                                OutputCallback callback) {
@@ -268,6 +212,62 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
                           "No available resources to schedule request");
     }
   });
+}
+
+void VLMMaster::handle_request(const std::vector<MMChatMessage>& raw_input_data,
+                               RequestParams sp,
+                               OutputCallback callback) {
+  static MMInputHelper helper;
+  std::vector<Message> messages;
+  MMInput mm_inputs;
+
+  if (!helper.trans(raw_input_data, messages, mm_inputs.items_)) {
+    LOG(ERROR) << "MMInputHelper trans failed, ingnore this input.";
+    return;
+  }
+
+  handle_request(std::move(messages), std::move(mm_inputs), sp, callback);
+}
+
+void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
+                                     const std::vector<MMData>& mm_datas,
+                                     const std::vector<RequestParams>& sps,
+                                     BatchOutputCallback callback) {
+  CHECK(prompts.size() == sps.size() || sps.size() == 1)
+      << "Number of prompts and sampling parameters should be the same";
+
+  const size_t num_requests = prompts.size();
+  for (size_t i = 0; i < num_requests; ++i) {
+    handle_request(std::move(prompts[i]),
+                   std::move(mm_datas[i]),
+                   // the sampling parameter may be shared
+                   sps.size() == 1 ? sps[0] : std::move(sps[i]),
+                   [i, callback](const RequestOutput& output) {
+                     output.log_request_status();
+                     return callback(i, output);
+                   });
+  }
+}
+
+void VLMMaster::handle_batch_request(
+    const std::vector<std::vector<Message>>& conversations,
+    const std::vector<MMData>& mm_datas,
+    const std::vector<RequestParams>& sps,
+    BatchOutputCallback callback) {
+  CHECK(conversations.size() == sps.size() || sps.size() == 1)
+      << "Number of conversations and sampling parameters should be the same";
+
+  const size_t num_requests = conversations.size();
+  for (size_t i = 0; i < num_requests; ++i) {
+    handle_request(std::move(conversations[i]),
+                   std::move(mm_datas[i]),
+                   // the sampling parameter may be shared
+                   sps.size() == 1 ? sps[0] : std::move(sps[i]),
+                   [i, callback](const RequestOutput& output) {
+                     output.log_request_status();
+                     return callback(i, output);
+                   });
+  }
 }
 
 void VLMMaster::run() {
