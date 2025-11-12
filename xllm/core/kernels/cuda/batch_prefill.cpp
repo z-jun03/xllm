@@ -26,8 +26,7 @@ void batch_prefill(torch::Tensor float_workspace_buffer,
                    torch::Tensor value,
                    torch::Tensor q_cu_seq_lens,
                    torch::Tensor kv_cu_seq_lens,
-                   torch::Tensor paged_kv_indptr,
-                   int64_t window_size_left,
+                   int64_t window_left,
                    double sm_scale,
                    torch::Tensor output,
                    std::optional<torch::Tensor>& output_lse,
@@ -44,7 +43,6 @@ void batch_prefill(torch::Tensor float_workspace_buffer,
                                           /*use_logits_soft_cap=*/false,
                                           /*use_fp16_qk_reduction=*/false);
 
-  torch::Tensor paged_kv_indptr_host = paged_kv_indptr.to(torch::kCPU);
   torch::Tensor qo_indptr_host = q_cu_seq_lens.to(torch::kCPU);
   torch::Tensor kv_cu_seq_lens_host = kv_cu_seq_lens.to(torch::kCPU);
   torch::Tensor kv_len_arr_host =
@@ -52,25 +50,24 @@ void batch_prefill(torch::Tensor float_workspace_buffer,
   const int64_t total_num_rows = qo_indptr_host.size(0);
   const int64_t batch_size = qo_indptr_host.size(0) - 1;
 
-  torch::Tensor plan_info =
-      FunctionFactory::get_instance().prefill_plan_func(uri).call(
-          float_workspace_buffer,
-          int_workspace_buffer,
-          page_locked_int_workspace_buffer,
-          qo_indptr_host,
-          paged_kv_indptr_host,
-          kv_len_arr_host,
-          total_num_rows,
-          batch_size,
-          query.size(1),  // num_qo_heads
-          key.size(1),    // num_kv_heads
-          /*page_size=*/1,
-          enable_cuda_graph,
-          query.size(-1),  // head_dim_qk
-          value.size(-1),  // head_dim_vo
-          /*causal=*/true);
+  auto plan_info = FunctionFactory::get_instance().prefill_plan_func(uri).call(
+      float_workspace_buffer,
+      int_workspace_buffer,
+      page_locked_int_workspace_buffer,
+      qo_indptr_host,
+      kv_cu_seq_lens_host,
+      kv_len_arr_host,
+      total_num_rows,
+      batch_size,
+      query.size(1),  // num_qo_heads
+      key.size(1),    // num_kv_heads
+      /*page_size=*/1,
+      enable_cuda_graph,
+      query.size(-1),  // head_dim_qk
+      value.size(-1),  // head_dim_vo
+      /*causal=*/true);
 
-  FunctionFactory::get_instance().prefill_run_func(uri).call(
+  FunctionFactory::get_instance().prefill_ragged_run_func(uri).call(
       float_workspace_buffer,
       int_workspace_buffer,
       plan_info,
@@ -78,12 +75,12 @@ void batch_prefill(torch::Tensor float_workspace_buffer,
       key,
       value,
       q_cu_seq_lens,
-      paged_kv_indptr,
+      kv_cu_seq_lens,
       output,
       output_lse,
-      /*mask_mode_code=CAUSAL*/ 1,
+      /*mask_mode_code=*/1,  // CAUSAL
       /*kv_layout_code=*/0,  // NHD layout
-      window_size_left,
+      window_left,
       support_pdl(),
       /*maybe_custom_mask=*/std::optional<torch::Tensor>(),
       /*maybe_mask_indptr=*/std::optional<torch::Tensor>(),
@@ -94,7 +91,7 @@ void batch_prefill(torch::Tensor float_workspace_buffer,
       /*logits_soft_cap=*/0.0,
       sm_scale,
       /*rope_rcp_scale=*/1.0,
-      /*rope_rcp_theta=*/10000.0,
+      /*rope_rcp_theta=*/1.0 / 10000.0,
       /*token_pos_in_items_len=*/0);
 }
 

@@ -44,9 +44,17 @@ namespace xllm::kernel::cuda {
 // Only supported for >= sm90, and currently only for FA2, CUDA core, and
 // trtllm-gen decode.
 bool support_pdl() {
-  cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, /*device_id=*/0);
-  return prop.major >= 9;
+  static bool supported = []() {
+    cudaDeviceProp prop;
+    cudaError_t err = cudaGetDeviceProperties(&prop, /*device_id=*/0);
+    if (err != cudaSuccess) {
+      LOG(ERROR) << "cuda get device properties failed";
+      return false;
+    }
+    return prop.major >= 9;
+  }();
+
+  return supported;
 }
 
 std::string path_to_uri_so_lib(const std::string& uri) {

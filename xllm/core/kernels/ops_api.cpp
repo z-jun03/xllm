@@ -118,7 +118,6 @@ void batch_prefill(AttentionParams& params) {
                       params.value,
                       params.q_cu_seq_lens,
                       params.kv_cu_seq_lens,
-                      params.paged_kv_indptr,
                       params.window_size_left,
                       params.scale,
                       params.output,

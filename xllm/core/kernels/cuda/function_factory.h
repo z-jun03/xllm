@@ -74,7 +74,7 @@ using PREFILL_PLAN_FUNC_TYPE =
                                              int64_t,
                                              int64_t,
                                              bool)>;
-using PREFILL_RUN_FUNC_TYPE =
+using PREFILL_RAGGED_RUN_FUNC_TYPE =
     torch::TypedOperatorHandle<void(torch::Tensor,
                                     torch::Tensor,
                                     torch::Tensor,
@@ -120,234 +120,213 @@ class FunctionFactory {
 
   ACT_AND_MUL_FUNC_TYPE act_and_mul(const std::string& uri) {
     static std::optional<ACT_AND_MUL_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string schema_name = uri + "::" + uri;
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(schema_name.c_str(), "")
-                .typed<void(torch::Tensor&, torch::Tensor&, bool)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string schema_name = uri + "::" + uri;
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(schema_name.c_str(), "")
+              .typed<void(torch::Tensor&, torch::Tensor&, bool)>();
+    });
 
     return f.value();
   }
 
   DECODE_PLAN_FUNC_TYPE decode_plan_func(const std::string& uri) {
     static std::optional<DECODE_PLAN_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string plan_schema_name = uri + "::plan";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(plan_schema_name.c_str(), "")
-                .typed<torch::Tensor(torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     int64_t,
-                                     int64_t,
-                                     int64_t,
-                                     int64_t,
-                                     bool,
-                                     int64_t,
-                                     double,
-                                     int64_t,
-                                     int64_t,
-                                     torch::Tensor,
-                                     torch::Tensor)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string plan_schema_name = uri + "::plan";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(plan_schema_name.c_str(), "")
+              .typed<torch::Tensor(torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   int64_t,
+                                   int64_t,
+                                   int64_t,
+                                   int64_t,
+                                   bool,
+                                   int64_t,
+                                   double,
+                                   int64_t,
+                                   int64_t,
+                                   torch::Tensor,
+                                   torch::Tensor)>();
+    });
 
     return f.value();
   }
 
   DECODE_RUN_FUNC_TYPE decode_run_func(const std::string& uri) {
     static std::optional<DECODE_RUN_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string run_schema_name = uri + "::run";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(run_schema_name.c_str(), "")
-                .typed<void(torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            std::optional<torch::Tensor>,
-                            int64_t,
-                            int64_t,
-                            bool,
-                            std::optional<torch::Tensor>,
-                            double,
-                            double,
-                            double,
-                            double)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string run_schema_name = uri + "::run";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(run_schema_name.c_str(), "")
+              .typed<void(torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          std::optional<torch::Tensor>,
+                          int64_t,
+                          int64_t,
+                          bool,
+                          std::optional<torch::Tensor>,
+                          double,
+                          double,
+                          double,
+                          double)>();
+    });
 
     return f.value();
   }
 
   PREFILL_PLAN_FUNC_TYPE prefill_plan_func(const std::string& uri) {
     static std::optional<PREFILL_PLAN_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string plan_schema_name = uri + "::plan";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(plan_schema_name.c_str(), "")
-                .typed<torch::Tensor(torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     torch::Tensor,
-                                     int64_t,
-                                     int64_t,
-                                     int64_t,
-                                     int64_t,
-                                     int64_t,
-                                     bool,
-                                     int64_t,
-                                     int64_t,
-                                     bool)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string plan_schema_name = uri + "::plan";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(plan_schema_name.c_str(), "")
+              .typed<torch::Tensor(torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   torch::Tensor,
+                                   int64_t,
+                                   int64_t,
+                                   int64_t,
+                                   int64_t,
+                                   int64_t,
+                                   bool,
+                                   int64_t,
+                                   int64_t,
+                                   bool)>();
+    });
 
     return f.value();
   }
 
-  PREFILL_RUN_FUNC_TYPE prefill_run_func(const std::string& uri) {
-    static std::optional<PREFILL_RUN_FUNC_TYPE> f;
-    static std::mutex mutex;
+  PREFILL_RAGGED_RUN_FUNC_TYPE prefill_ragged_run_func(const std::string& uri) {
+    static std::optional<PREFILL_RAGGED_RUN_FUNC_TYPE> f;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string run_schema_name = uri + "::ragged_run";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(run_schema_name.c_str(), "")
-                .typed<void(torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            std::optional<torch::Tensor>,
-                            int64_t,
-                            int64_t,
-                            int64_t,
-                            bool,
-                            std::optional<torch::Tensor>,
-                            std::optional<torch::Tensor>,
-                            std::optional<torch::Tensor>,
-                            std::optional<torch::Tensor>,
-                            std::optional<torch::Tensor>,
-                            std::optional<torch::Tensor>,
-                            double,
-                            double,
-                            double,
-                            double,
-                            int64_t)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string run_schema_name = uri + "::ragged_run";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(run_schema_name.c_str(), "")
+              .typed<void(torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          std::optional<torch::Tensor>,
+                          int64_t,
+                          int64_t,
+                          int64_t,
+                          bool,
+                          std::optional<torch::Tensor>,
+                          std::optional<torch::Tensor>,
+                          std::optional<torch::Tensor>,
+                          std::optional<torch::Tensor>,
+                          std::optional<torch::Tensor>,
+                          std::optional<torch::Tensor>,
+                          double,
+                          double,
+                          double,
+                          double,
+                          int64_t)>();
+    });
 
     return f.value();
   }
 
   RMSNORM_FUNC_TYPE rmsnorm_func(const std::string& uri) {
     static std::optional<RMSNORM_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string schema_name = "norm::rmsnorm";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(schema_name.c_str(), "")
-                .typed<void(torch::Tensor&,
-                            torch::Tensor&,
-                            torch::Tensor&,
-                            double,
-                            bool)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string schema_name = "norm::rmsnorm";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(schema_name.c_str(), "")
+              .typed<void(torch::Tensor&,
+                          torch::Tensor&,
+                          torch::Tensor&,
+                          double,
+                          bool)>();
+    });
 
     return f.value();
   }
 
   ROPE_FUNC_TYPE rope_func(const std::string& uri) {
     static std::optional<ROPE_FUNC_TYPE> f;
-    static std::mutex mutex;
     if (f.has_value()) {
       return f.value();
     }
 
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (!f.has_value()) {
-        auto lib = torch::DynamicLibrary(
-            path_to_uri_so_lib(uri).c_str(), nullptr, true);
-        std::string schema_name = "rope::apply_rope_pos_ids_cos_sin_cache";
-        f = torch::Dispatcher::singleton()
-                .findSchemaOrThrow(schema_name.c_str(), "")
-                .typed<void(torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            torch::Tensor,
-                            bool)>();
-      }
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&uri]() {
+      auto lib =
+          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      std::string schema_name = "rope::apply_rope_pos_ids_cos_sin_cache";
+      f = torch::Dispatcher::singleton()
+              .findSchemaOrThrow(schema_name.c_str(), "")
+              .typed<void(torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          torch::Tensor,
+                          bool)>();
+    });
 
     return f.value();
   }

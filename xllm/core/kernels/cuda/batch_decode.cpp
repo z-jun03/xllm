@@ -27,7 +27,7 @@ void batch_decode(torch::Tensor float_workspace_buffer,
                   torch::Tensor paged_kv_indptr,
                   torch::Tensor paged_kv_indices,
                   torch::Tensor paged_kv_last_page_len,
-                  int64_t window_size_left,
+                  int64_t window_left,
                   double sm_scale,
                   torch::Tensor output,
                   std::optional<torch::Tensor>& output_lse,
@@ -50,23 +50,22 @@ void batch_decode(torch::Tensor float_workspace_buffer,
   torch::Tensor empty_kv_data =
       torch::empty({0}, torch::TensorOptions().dtype(k_cache.scalar_type()));
 
-  torch::Tensor plan_info =
-      FunctionFactory::get_instance().decode_plan_func(uri).call(
-          float_workspace_buffer,
-          int_workspace_buffer,
-          page_locked_int_workspace_buffer,
-          paged_kv_indptr_host,
-          batch_size,
-          query.size(1),    // num_qo_heads
-          k_cache.size(2),  // num_kv_heads
-          k_cache.size(1),  // block_size
-          enable_cuda_graph,
-          window_size_left,
-          /*logits_soft_cap=*/0.0,
-          query.size(-1),    // head_dim_qk
-          v_cache.size(-1),  // head_dim_vo
-          empty_q_data,
-          empty_kv_data);
+  auto plan_info = FunctionFactory::get_instance().decode_plan_func(uri).call(
+      float_workspace_buffer,
+      int_workspace_buffer,
+      page_locked_int_workspace_buffer,
+      paged_kv_indptr_host,
+      batch_size,
+      query.size(1),    // num_qo_heads
+      k_cache.size(2),  // num_kv_heads
+      k_cache.size(1),  // block_size
+      enable_cuda_graph,
+      window_left,
+      /*logits_soft_cap=*/0.0,
+      query.size(-1),    // head_dim_qk
+      v_cache.size(-1),  // head_dim_vo
+      empty_q_data,
+      empty_kv_data);
 
   FunctionFactory::get_instance().decode_run_func(uri).call(
       float_workspace_buffer,
@@ -81,13 +80,13 @@ void batch_decode(torch::Tensor float_workspace_buffer,
       output,
       output_lse,
       /*kv_layout_code=*/0,  // NHD layout
-      window_size_left,
+      window_left,
       support_pdl(),
       /*maybe_alibi_slopes=*/std::optional<torch::Tensor>(),
       /*logits_soft_cap=*/0.0,
       sm_scale,
       /*rope_rcp_scale=*/1.0,
-      /*rope_rcp_theta=*/10000.0);
+      /*rope_rcp_theta=*/1.0 / 10000.0);
 }
 
 }  // namespace xllm::kernel::cuda
