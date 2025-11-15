@@ -158,7 +158,7 @@ void batch_decode(AttentionParams& params) {
                      params.page_locked_int_workspace_buffer,
                      params.query,
                      params.k_cache,
-                     params.v_cache,
+                     params.v_cache.value_or(torch::Tensor()),
                      params.paged_kv_indptr,
                      params.paged_kv_indices,
                      params.paged_kv_last_page_len,

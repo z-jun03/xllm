@@ -248,10 +248,14 @@ void BatchInputBuilder::process_sequences_multithreaded(uint32_t start_idx,
                                            state.kv_cache_start_offsets.begin(),
                                            state.kv_cache_start_offsets.end());
     }
+
     // for flashinfer
-    state_.paged_kv_indptr.insert(state_.paged_kv_indptr.end(),
-                                  state.paged_kv_indptr.begin(),
-                                  state.paged_kv_indptr.end());
+    // we skip the first '0' element
+    int32_t paged_kv_indptr_offset = state_.paged_kv_indptr.back();
+    for (size_t i = 1; i < state.paged_kv_indptr.size(); ++i) {
+      state_.paged_kv_indptr.emplace_back(state.paged_kv_indptr[i] +
+                                          paged_kv_indptr_offset);
+    }
     state_.paged_kv_indices.insert(state_.paged_kv_indices.end(),
                                    state.paged_kv_indices.begin(),
                                    state.paged_kv_indices.end());

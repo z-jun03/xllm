@@ -23,7 +23,7 @@ void apply_rope_pos_ids_cos_sin_cache(torch::Tensor q,
                                       torch::Tensor cos_sin_cache,
                                       torch::Tensor pos_ids,
                                       bool interleave) {
-  const int64_t head_dim = cos_sin_cache.size(-1);
+  const int64_t head_dim = cos_sin_cache.size(-1) / 2;
   q = q.view({q.size(0), -1, head_dim});
   k = k.view({k.size(0), -1, head_dim});
 
