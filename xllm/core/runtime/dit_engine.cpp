@@ -25,9 +25,11 @@ limitations under the License.
 #include "util/timer.h"
 #include "worker.h"
 
+// 4卡，2个tp_size
 namespace xllm {
 DiTEngine::DiTEngine(const runtime::Options& options) : options_(options) {
   const auto& devices = options_.devices();
+  LOG(INFO) << "Devices: " << devices;
   CHECK_GT(devices.size(), 0) << "At least one device is required";
 
   CHECK(!devices[0].is_cpu()) << "CPU device is not supported";
@@ -35,7 +37,16 @@ DiTEngine::DiTEngine(const runtime::Options& options) : options_(options) {
   for (const auto device : devices) {
     CHECK_EQ(device.type(), device_type)
         << "All devices should be the same type";
+    int currentDevId = device.index();
+#if defined(USE_NPU)
+    int ret = aclrtSetDevice(currentDevId);
+    if (ret != 0) {
+      LOG(ERROR) << "ACL set device id:" << currentDevId
+                 << " failed, ret:" << ret;
+    }
+#endif
   }
+
   if (devices.size() > 1) {
     // create a process group for each device if there are multiple gpus
     process_groups_ = parallel_state::create_npu_process_groups(devices);
@@ -58,9 +69,10 @@ DiTEngine::DiTEngine(const runtime::Options& options) : options_(options) {
     for (auto& worker : workers_) {
       futures.emplace_back(worker->process_group_test_async());
     }
-    // wait up to 4 seconds for all futures to complete
-    folly::collectAll(futures).within(std::chrono::seconds(4)).get();
+    // wait up to 10 seconds for all futures to complete
+    folly::collectAll(futures).within(std::chrono::seconds(10)).get();
   }
+  LOG(INFO) << "DiT Engine Initialized done Using devices: " << devices;
 }
 
 bool DiTEngine::init() {
@@ -71,6 +83,30 @@ bool DiTEngine::init() {
   return true;
 }
 
+// bool DiTEngine::init_model() {
+//   const std::string& model_path = options_.model_path();
+//   // init model for each worker in parallel
+//   // multiple workers, call async init
+//   std::vector<folly::SemiFuture<bool>> futures;
+//   LOG(INFO) << "Starting to init model on " << workers_.size() << "
+//   workers."; futures.reserve(workers_.size()); for (auto& worker : workers_)
+//   {
+//     futures.push_back(worker->init_model(model_path));
+//   }
+
+//   // wait for all futures to complete
+//   auto results = folly::collectAll(futures).get();
+//   LOG(INFO) << "All workers completed model initialization.";
+//   for (const auto& result : results) {
+//     if (!result.value()) {
+//       return false;
+//     }
+//   }
+
+//   LOG(INFO) << "All workers successfully initialized the model.";
+//   return true;
+// }
+
 bool DiTEngine::init_model() {
   const std::string& model_path = options_.model_path();
   // init model for each worker in parallel
@@ -79,7 +115,7 @@ bool DiTEngine::init_model() {
   LOG(INFO) << "Starting to init model on " << workers_.size() << " workers.";
   futures.reserve(workers_.size());
   for (auto& worker : workers_) {
-    futures.push_back(worker->init_model(model_path));
+    futures.push_back(worker->init_model_async(model_path));
   }
 
   // wait for all futures to complete
@@ -105,7 +141,7 @@ DiTForwardOutput DiTEngine::step(std::vector<DiTBatch>& batches) {
   std::vector<folly::SemiFuture<std::optional<DiTForwardOutput>>> futures;
   futures.reserve(workers_.size());
   for (auto& worker : workers_) {
-    futures.emplace_back(worker->step(forward_inputs));
+    futures.emplace_back(worker->step_async(forward_inputs));
   }
 
   // wait for the all future to complete

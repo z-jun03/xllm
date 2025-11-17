@@ -93,11 +93,19 @@ struct ParallelArgs {
   ProcessGroup* process_group_ = nullptr;
   ProcessGroup* dp_local_process_group_ = nullptr;
 
+  // ProcessGroup* cfg_group_ = nullptr;
+  // ProcessGroup* pp_group_ = nullptr;
+  // ProcessGroup* sp_group_ = nullptr;
+  // ProcessGroup* tp_group_ = nullptr;
+
   // dp size
   PROPERTY(int32_t, dp_size) = 1;
 
   // ep size
   PROPERTY(int32_t, ep_size) = 1;
+
+  // tp_size
+  PROPERTY(int32_t, tp_size) = 1;
 
 #if defined(USE_NPU)
   // atb hccl mapping json data

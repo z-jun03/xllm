@@ -105,6 +105,10 @@ DECLARE_int32(dp_size);
 
 DECLARE_int32(ep_size);
 
+DECLARE_int32(tp_size);
+
+DECLARE_int32(sp_size);
+
 DECLARE_string(xservice_addr);
 
 DECLARE_string(instance_role);

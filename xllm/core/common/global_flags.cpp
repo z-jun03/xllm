@@ -151,6 +151,10 @@ DEFINE_int32(dp_size, 1, "Data parallel size for MLA attention.");
 
 DEFINE_int32(ep_size, 1, "Expert parallel size for MoE model.");
 
+DEFINE_int32(tp_size, 1, "Tensor parallel size");
+
+DEFINE_int32(sp_size, 1, "Sequence parallel size");
+
 DEFINE_string(
     communication_backend,
     "lccl",

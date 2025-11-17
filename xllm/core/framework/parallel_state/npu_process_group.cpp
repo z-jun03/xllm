@@ -15,6 +15,19 @@ limitations under the License.
 
 #include "npu_process_group.h"
 
+#include <c10/core/Device.h>
+#if defined(USE_NPU)
+#include <hccl/hccl_types.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include <acl/acl.h>
+#include <torch_npu/csrc/core/npu/NPUCachingAllocator.h>
+#include <torch_npu/csrc/core/npu/NPUEvent.h>
+#include <torch_npu/csrc/core/npu/NPUStream.h>
+
+#include "hccl/hccl.h"
+#endif
+
 namespace {
 
 #define HCCLCHECK(cmd)                                               \

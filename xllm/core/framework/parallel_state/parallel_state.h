@@ -39,5 +39,10 @@ std::vector<std::unique_ptr<ProcessGroup>> create_npu_process_groups(
 std::pair<int, std::vector<uint64_t>> get_group_rank(int world_size,
                                                      int global_rank,
                                                      int split_size);
+
+// struct GroupCoordinator {
+
+// }
+
 }  // namespace parallel_state
 }  // namespace xllm

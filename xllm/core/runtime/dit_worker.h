@@ -19,10 +19,13 @@ limitations under the License.
 #include <torch/torch.h>
 
 #include <thread>
+#include <vector>
 
 #include "dit_executor.h"
 #include "framework/dit_model_context.h"
 #include "framework/parallel_state/parallel_args.h"
+#include "framework/parallel_state/parallel_state.h"
+#include "framework/parallel_state/process_group.h"
 #include "options.h"
 #include "platform/device.h"
 #include "util/threadpool.h"
@@ -40,9 +43,31 @@ class DiTWorker {
   // initialize model, cache manager. blocking call
   bool init_model(const std::string& model_weights_path);
 
+  folly::SemiFuture<bool> init_model_async(
+      const std::string& model_weights_path);
+  // folly::SemiFuture<std::optional<DiTForwardOutput>> step_async(
+  //     const DiTForwardInput& inputs);
+
   std::optional<DiTForwardOutput> step(const DiTForwardInput& inputs);
 
   folly::SemiFuture<folly::Unit> process_group_test_async();
+
+  void process_group_test();
+
+  folly::SemiFuture<std::optional<DiTForwardOutput>> step_async(
+      const DiTForwardInput& inputs);
+
+  bool init_model_parallel(int rank,
+                           int world_size,
+                           std::vector<torch::Device> devices);
+  // const std::vector<std::unique_ptr<ProcessGroup>>& process_groups);
+
+  std::vector<std::unique_ptr<ProcessGroup>> init_model_parallel_group(
+      const std::vector<std::vector<int64_t>>& group_ranks,
+      int local_rank,
+      std::vector<torch::Device> devices);
+  // const std::vector<std::unique_ptr<ProcessGroup>>& existing_process_groups)
+  // ;
 
   // prepare input for execution
   DiTForwardInput prepare_inputs(DiTBatch& batch);
@@ -66,6 +91,14 @@ class DiTWorker {
   ParallelArgs parallel_args_;
 
   ThreadPool threadpool_;
+
+  int32_t rank_;
+
+  int64_t world_size_;
+
+  std::vector<std::unique_ptr<ProcessGroup>> tp_process_groups_;
+
+  std::vector<std::unique_ptr<ProcessGroup>> sp_process_groups_;
 };
 
 }  // namespace xllm

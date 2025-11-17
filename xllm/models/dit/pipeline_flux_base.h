@@ -18,6 +18,7 @@ limitations under the License.
 #include <torch/torch.h>
 
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -33,6 +34,7 @@ limitations under the License.
 #include "flowmatch_euler_discrete_scheduler.h"
 #include "models/model_registry.h"
 #include "t5_encoder.h"
+#include "torch_npu/csrc/core/npu/NPUStream.h"
 
 namespace xllm {
 
@@ -261,7 +263,10 @@ class FluxPipelineBaseImpl : public torch::nn::Module {
       std::optional<torch::Tensor> pooled_prompt_embeds,
       int64_t num_images_per_prompt = 1,
       int64_t max_sequence_length = 512) {
+    auto start = std::chrono::high_resolution_clock::now();
     std::vector<std::string> prompt_list;
+    c10_npu::NPUStream stream_clip = c10_npu::getNPUStreamFromPool();
+    c10_npu::NPUStream stream_t5 = c10_npu::getNPUStreamFromPool();
     if (prompt.has_value()) {
       prompt_list = prompt.value();
     }
@@ -276,14 +281,44 @@ class FluxPipelineBaseImpl : public torch::nn::Module {
       if (prompt_2_list.empty()) {
         prompt_2_list = prompt_list;
       }
+      // for (int i= 0; i< 2; i++) {
+      //   if(i==0) {
+      //     c10_npu::setCurrentNPUStream(stream_clip);
+      //     pooled_prompt_embeds =
+      //     get_clip_prompt_embeds(prompt_list, num_images_per_prompt);
+      //   } else {
+      //     c10_npu::setCurrentNPUStream(stream_t5);
+      //     prompt_embeds = get_t5_prompt_embeds(
+      //     prompt_2_list, num_images_per_prompt, max_sequence_length);
+      //   }
+
+      //   if (i == 1) {
+      //           stream_t5.synchronize();
+      //   } else {
+      // stream_clip.synchronize();
+      //   }
+      // }
+      c10_npu::setCurrentNPUStream(stream_clip);
       pooled_prompt_embeds =
           get_clip_prompt_embeds(prompt_list, num_images_per_prompt);
+      c10_npu::setCurrentNPUStream(stream_t5);
       prompt_embeds = get_t5_prompt_embeds(
           prompt_2_list, num_images_per_prompt, max_sequence_length);
+      stream_clip.synchronize();
+      stream_t5.synchronize();
     }
     torch::Tensor text_ids = torch::zeros({prompt_embeds.value().size(1), 3},
                                           torch::device(device_).dtype(dtype_));
-
+    torch::npu::synchronize();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    LOG(INFO) << "耗时: " << duration_ms << " ms";
+    auto duration_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+            .count();
+    LOG(INFO) << "耗时: " << duration_us << " us";
     return std::make_tuple(prompt_embeds.value(),
                            pooled_prompt_embeds.has_value()
                                ? pooled_prompt_embeds.value()

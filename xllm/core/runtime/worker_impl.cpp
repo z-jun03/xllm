@@ -21,7 +21,13 @@ limitations under the License.
 #include <glog/logging.h>
 #include <torch/torch.h>
 #if defined(USE_NPU)
+#include <torch_npu/csrc/core/npu/NPUFormat.h>
+#include <torch_npu/csrc/core/npu/NPUFunctions.h>
+#include <torch_npu/csrc/framework/OpCommand.h>
+#include <torch_npu/torch_npu.h>
+
 #include "kernels/npu/xllm_ops/replace_token.h"
+#include "pytorch/adapter/utils/utils.h"
 #elif defined(USE_MLU)
 #include <torch_mlu/csrc/framework/core/caching_allocator.h>
 #endif
@@ -64,12 +70,23 @@ WorkerImpl::WorkerImpl(const ParallelArgs& parallel_args,
   dp_driver_ =
       parallel_args.dp_size() > 1 && parallel_args.rank() % tp_size == 0;
 
-  device_.set_device();
-  device_.init_device_context();
-  general_threadpool_.schedule([this]() mutable { device_.set_device(); });
+  // #if defined(USE_NPU)
+  //   int currentDevId = device.index();
+  //   int ret = aclrtSetDevice(currentDevId);
+  //   if (ret != 0) {
+  //     LOG(ERROR) << "ACL set device id:" << currentDevId
+  //                << " failed, ret:" << ret;
+  //   }
+  //   std::string device_name = "npu:" + std::to_string(currentDevId);
+  //   torch_npu::init_npu(device_name);
+  //   npu_stream_helper_ = std::make_unique<NPUStreamHelper>();
+  //   extra_stream_helper_ = std::make_unique<NPUStreamHelper>();
+  //   general_threadpool_.schedule(
+  //       [this]() mutable { c10_npu::SetDevice(device_.index()); });
 
-  prepare_stream_ = device_.get_stream_from_pool();
-  copy_out_stream_ = device_.get_stream_from_pool();
+  // #elif defined(USE_MLU)
+  //   // TODO(mlu): implement mlu init context
+  // #endif
   sampler_ = std::make_unique<Sampler>();
 }
 
