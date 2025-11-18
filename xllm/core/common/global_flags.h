@@ -81,6 +81,16 @@ DECLARE_int64(eplb_update_interval);
 
 DECLARE_double(eplb_update_threshold);
 
+DECLARE_string(dit_cache);
+
+DECLARE_int64(dit_cache_warmup_steps);
+
+DECLARE_int64(dit_cache_n_derivatives);
+
+DECLARE_int64(dit_cache_skip_interval_steps);
+
+DECLARE_double(dit_cache_residual_diff_threshold);
+
 DECLARE_string(rank_tablefile);
 
 DECLARE_bool(enable_mla);

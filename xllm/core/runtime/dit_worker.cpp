@@ -38,6 +38,44 @@ limitations under the License.
 #include "util/utils.h"
 
 namespace xllm {
+
+namespace {
+DiTCacheConfig prase_dit_cache_config() {
+  DiTCacheConfig cache_config;
+  switch (FLAGS_dit_cache_policy) {
+    case "FBCache":
+      cache_config.selected_policy = PolicyType::FBCache;
+      cache_config.fbcache.warmup_steps = FLAGS_dit_cache_warmup_steps;
+      cache_config.fbcache.residual_diff_threshold =
+          FLAGS_dit_cache_residual_diff_threshold;
+      break;
+    case "TaylorSeer":
+      cache_config.selected_policy = PolicyType::TaylorSeer;
+      cache_config.taylorseer.n_derivatives = FLAGS_dit_cache_n_derivatives;
+      cache_config.taylorseer.skip_interval_steps =
+          FLAGS_dit_cache_skip_interval_steps;
+      cache_config.taylorseer.warmup_steps = FLAGS_dit_cache_warmup_steps;
+      break;
+    case "FBCacheTaylorSeer":
+      cache_config.selected_policy = PolicyType::FBCacheTaylorSeer;
+      cache_config.fbcachetaylorseer.n_derivatives =
+          FLAGS_dit_cache_n_derivatives;
+      cache_config.fbcachetaylorseer.warmup_steps =
+          FLAGS_dit_cache_warmup_steps;
+      cache_config.fbcachetaylorseer.residual_diff_threshold =
+          FLAGS_dit_cache_residual_diff_threshold;
+      break;
+    case "None":
+      cache_config.selected_policy = PolicyType::None;
+      break;
+    default:
+      cache_config.selected_policy = PolicyType::None;
+      break;
+  }
+  return cache_config;
+}
+}  // namespace
+
 DiTWorker::DiTWorker(const ParallelArgs& parallel_args,
                      const torch::Device& device,
                      const runtime::Options& options)
@@ -64,8 +102,11 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   dit_model_executor_ =
       std::make_unique<DiTExecutor>(dit_model_.get(), options_);
 
-  DiTCacheConfig cache_config_;
+  DiTCacheConfig cache_config = prase_dit_cache_config();
+  DiTCache::get_instance().init(cache_config);
 
+  // DiTCacheConfig cache_config_ = prase_dit_cache_config();
+  // cache_config_ = prase_cache_config();
   // TODO: Optimize ditcache configuration initialization.
 
   cache_config_.selected_policy = PolicyType::TaylorSeer;
@@ -82,11 +123,15 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
 
   // cache_config_.selected_policy = PolicyType::None;
 
-  bool success = DiTCache::get_instance().init(cache_config_);
-  CHECK(success) << "DiTCache init failed";
+  // bool success = DiTCache::get_instance().init(cache_config_);
+  // CHECK(success) << "DiTCache init failed";
 
   return true;
 }
+
+// 格式 dit-cache = fbcache|residual_diff_threshold:0.09
+//  dit-cache = taylorseer|n_derivatives:3|skip_interval_steps:3
+//  dit-cache|fbcache_taylorseer|n_derivatives:3|skip_interval_steps:3|residual_diff_threshold:0.09
 
 std::optional<DiTForwardOutput> DiTWorker::step(const DiTForwardInput& inputs) {
   device_.set_device();
