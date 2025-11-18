@@ -120,14 +120,15 @@ class FunctionFactory {
 
   ACT_AND_MUL_FUNC_TYPE act_and_mul(const std::string& uri) {
     static std::optional<ACT_AND_MUL_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string schema_name = uri + "::" + uri;
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(schema_name.c_str(), "")
@@ -139,14 +140,15 @@ class FunctionFactory {
 
   DECODE_PLAN_FUNC_TYPE decode_plan_func(const std::string& uri) {
     static std::optional<DECODE_PLAN_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string plan_schema_name = uri + "::plan";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(plan_schema_name.c_str(), "")
@@ -172,14 +174,15 @@ class FunctionFactory {
 
   DECODE_RUN_FUNC_TYPE decode_run_func(const std::string& uri) {
     static std::optional<DECODE_RUN_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string run_schema_name = uri + "::run";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(run_schema_name.c_str(), "")
@@ -209,14 +212,15 @@ class FunctionFactory {
 
   PREFILL_PLAN_FUNC_TYPE prefill_plan_func(const std::string& uri) {
     static std::optional<PREFILL_PLAN_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string plan_schema_name = uri + "::plan";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(plan_schema_name.c_str(), "")
@@ -242,14 +246,15 @@ class FunctionFactory {
 
   PREFILL_RAGGED_RUN_FUNC_TYPE prefill_ragged_run_func(const std::string& uri) {
     static std::optional<PREFILL_RAGGED_RUN_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string run_schema_name = uri + "::ragged_run";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(run_schema_name.c_str(), "")
@@ -285,14 +290,15 @@ class FunctionFactory {
 
   RMSNORM_FUNC_TYPE rmsnorm_func(const std::string& uri) {
     static std::optional<RMSNORM_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string schema_name = "norm::rmsnorm";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(schema_name.c_str(), "")
@@ -308,14 +314,15 @@ class FunctionFactory {
 
   ROPE_FUNC_TYPE rope_func(const std::string& uri) {
     static std::optional<ROPE_FUNC_TYPE> f;
+    static std::unique_ptr<torch::DynamicLibrary> lib;
     if (f.has_value()) {
       return f.value();
     }
 
     static std::once_flag flag;
     std::call_once(flag, [&uri]() {
-      auto lib =
-          torch::DynamicLibrary(path_to_uri_so_lib(uri).c_str(), nullptr, true);
+      lib = std::make_unique<torch::DynamicLibrary>(
+          path_to_uri_so_lib(uri).c_str(), nullptr, true);
       std::string schema_name = "rope::apply_rope_pos_ids_cos_sin_cache";
       f = torch::Dispatcher::singleton()
               .findSchemaOrThrow(schema_name.c_str(), "")
