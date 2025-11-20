@@ -27,14 +27,11 @@ on:
       - '*.yml'
   pull_request_review:
     types: [submitted]
-    paths-ignore:
-      - 'cmake/**'
-      - 'docs/**'
-      - 'third_party/**'
-      - 'tools/**'
-      - '*.md'
-      - '*.txt'
-      - '*.yml'
+    paths:
+      - '.github/**.yaml'
+      - 'cibuild/**.sh'
+      - 'setup.py'
+      - 'examples/generate.py'
 
 env:
   JOBNAME: xllm-x86_64-npu-cibuild-${{ github.run_id }}
@@ -94,12 +91,10 @@ jobs:
               echo "do_build=true" >> $GITHUB_OUTPUT
             fi
           elif [[ "$event" == "pull_request_review" ]]; then
-            if  [ "${{ steps.check_sensitive.outputs.requires_approval }}" == "true" ]; then
-              if [[ "${{ github.event.review.state }}" == "approved" ]]; then
-                echo "do_build=true" >> $GITHUB_OUTPUT
-              else
-                echo "do_build=false" >> $GITHUB_OUTPUT
-              fi
+            # Since pull_request_review now only triggers when sensitive files are modified,
+            # we only need to check if the review is approved
+            if [[ "${{ github.event.review.state }}" == "approved" ]]; then
+              echo "do_build=true" >> $GITHUB_OUTPUT
             else
               echo "do_build=false" >> $GITHUB_OUTPUT
             fi
