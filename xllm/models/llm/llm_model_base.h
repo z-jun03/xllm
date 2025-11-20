@@ -39,8 +39,13 @@ limitations under the License.
 #if defined(USE_NPU)
 #include "xllm_kernels/core/include/atb_speed/log.h"
 #else
-#include "core/layers/common/attention.h"
 #include "core/layers/common/layer_utils.h"
+#endif
+#if defined(USE_CUDA)
+#include "core/layers/cuda/attention.h"
+#endif
+#if defined(USE_MLU)
+#include "core/layers/mlu/attention.h"
 #endif
 
 namespace xllm {

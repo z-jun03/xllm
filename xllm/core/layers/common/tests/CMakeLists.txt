@@ -1,5 +1,9 @@
 include(cc_test)
 
+if(USE_MLU)
+	list(APPEND TEST_SRCS indexer_tests.cpp mla_tests.cpp deepseek_v2_decoder_layer_tests.cpp)
+endif()
+
 # Add test for DenseMLP
 cc_test(
   NAME
@@ -7,10 +11,8 @@ cc_test(
   SRCS
     dense_mlp_tests.cpp
     fused_moe_tests.cpp
-    indexer_tests.cpp
-    mla_tests.cpp
-    deepseek_v2_decoder_layer_tests.cpp
     tests_utils.cpp
+    ${TEST_SRCS}
   DEPS
     :common_layers
     :parallel_state

@@ -16,12 +16,8 @@ set(BASE_DEPS
 )
 
 if(USE_NPU)
-  list(APPEND BASE_DEPS :npu_layers)
   list(APPEND BASE_DEPS :platform_npu)
-else()
-  list(APPEND BASE_DEPS :common_layers)
 endif()
-
 
 # Define the library
 cc_library(

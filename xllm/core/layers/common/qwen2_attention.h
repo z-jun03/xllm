@@ -17,7 +17,11 @@ limitations under the License.
 
 #include <torch/torch.h>
 
-#include "attention.h"
+#if defined(USE_MLU)
+#include "../mlu/attention.h"
+#elif defined(USE_CUDA)
+#include "../cuda/attention.h"
+#endif
 #include "framework/kv_cache/kv_cache.h"
 #include "framework/model/model_args.h"
 #include "framework/parallel_state/parallel_args.h"

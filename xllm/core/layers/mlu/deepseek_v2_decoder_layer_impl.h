@@ -19,7 +19,6 @@ limitations under the License.
 
 #include "attention.h"
 #include "deepseek_v2_attention.h"
-#include "dense_mlp.h"
 #include "framework/kv_cache/kv_cache.h"
 #include "framework/model/model_args.h"
 #include "framework/model/model_input_params.h"
@@ -28,7 +27,8 @@ limitations under the License.
 #include "framework/parallel_state/parallel_state.h"
 #include "framework/quant_args.h"
 #include "framework/state_dict/state_dict.h"
-#include "fused_moe.h"
+#include "layers/common/dense_mlp.h"
+#include "layers/common/fused_moe.h"
 #include "layers/rms_norm.h"
 
 namespace xllm {

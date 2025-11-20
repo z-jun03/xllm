@@ -23,10 +23,10 @@ limitations under the License.
 #include "framework/parallel_state/parallel_args.h"
 #include "framework/quant_args.h"
 #include "framework/state_dict/state_dict.h"
-#include "indexer.h"
+#include "layers/common/indexer.h"
+#include "layers/common/linear.h"
+#include "layers/common/rotary_embedding.h"
 #include "layers/rms_norm.h"
-#include "linear.h"
-#include "rotary_embedding.h"
 
 namespace xllm {
 namespace layer {

@@ -60,7 +60,7 @@ cc_library(
     :request
     :state_dict
     :dit_cache
-    $<$<BOOL:${USE_NPU}>:npu_layers>
+    :layers
     :model
     :models
     :sampler

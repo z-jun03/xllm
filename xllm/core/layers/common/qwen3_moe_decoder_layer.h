@@ -19,7 +19,6 @@ limitations under the License.
 
 #include <functional>
 
-#include "attention.h"
 #include "dense_mlp.h"
 #include "framework/kv_cache/kv_cache.h"
 #include "framework/model/model_args.h"

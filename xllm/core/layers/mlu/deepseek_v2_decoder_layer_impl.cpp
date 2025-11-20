@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "deepseek_v2_decoder_layer.h"
+#include "deepseek_v2_decoder_layer_impl.h"
 
 namespace xllm {
 namespace layer {

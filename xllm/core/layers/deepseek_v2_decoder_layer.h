@@ -18,7 +18,7 @@ limitations under the License.
 #if defined(USE_NPU)
 #include "npu/npu_deepseek_v2_decoder_layer_impl.h"
 #else
-#include "common/deepseek_v2_decoder_layer.h"
+#include "mlu/deepseek_v2_decoder_layer_impl.h"
 #endif
 
 namespace xllm {

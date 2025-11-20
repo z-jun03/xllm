@@ -29,8 +29,12 @@ limitations under the License.
 #include "framework/parallel_state/parallel_args.h"
 #include "framework/quant_args.h"
 #include "framework/state_dict/state_dict.h"
-#include "layers/common/attention.h"
-#include "layers/common/deepseek_v2_decoder_layer.h"
+#if defined(USE_MLU)
+#include "layers/mlu/attention.h"
+#include "layers/mlu/deepseek_v2_decoder_layer_impl.h"
+#elif defined(USE_CUDA)
+#include "layers/cuda/attention.h"
+#endif
 #include "layers/common/tests/tests_utils.h"
 #include "platform/device.h"
 

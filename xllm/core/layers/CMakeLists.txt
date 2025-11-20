@@ -4,6 +4,14 @@ if(USE_NPU)
   include_directories(
     ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
   )
+  add_subdirectory(npu)
+else()
+  if(USE_MLU)
+    add_subdirectory(mlu)
+  else()
+    add_subdirectory(cuda)
+  endif()
+  add_subdirectory(common)
 endif()
 
 cc_library(
@@ -64,6 +72,9 @@ cc_library(
   SRCS
     multi_head_attention.cpp
   DEPS
+    $<$<BOOL:${USE_NPU}>:npu_layers>
+    $<$<BOOL:${USE_MLU}>:mlu_layers>
+    $<$<BOOL:${USE_CUDA}>:cuda_layers>
     :parallel_state
     :state_dict
     :kv_cache
@@ -75,9 +86,3 @@ cc_library(
     gflags::gflags
     torch
 )
-
-if(USE_NPU)
-  add_subdirectory(npu)
-else()
-  add_subdirectory(common)
-endif()

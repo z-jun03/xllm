@@ -33,7 +33,7 @@ limitations under the License.
 #include "framework/model/model_input_params.h"
 #include "framework/state_dict/state_dict.h"
 #if defined(USE_CUDA)
-#include "layers/common/flashinfer_workspace.h"
+#include "layers/cuda/flashinfer_workspace.h"
 #endif
 #include "models/model_registry.h"
 #include "util/threadpool.h"
