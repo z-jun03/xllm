@@ -35,11 +35,10 @@ class LlmForEmbeddingImplBase : public torch::nn::Module {
   // tokens: [num_tokens]
   // positions: [num_tokens] token pos in the sequence
   // returns: [num_tokens, hidden_size]
-  virtual torch::Tensor forward(
-      const std::vector<torch::Tensor>& tokens,
-      const std::vector<torch::Tensor>& positions,
-      std::vector<KVCache>& kv_caches,
-      const std::vector<ModelInputParams>& input_params) {
+  virtual torch::Tensor forward(const torch::Tensor& tokens,
+                                const torch::Tensor& positions,
+                                std::vector<KVCache>& kv_caches,
+                                const ModelInputParams& input_params) {
     return model_(tokens, positions, kv_caches, input_params);
   }
 
@@ -78,12 +77,11 @@ class LlmForEmbeddingImplBase : public torch::nn::Module {
 
   virtual void set_lm_head(layer::LmHead& head) { lm_head_ = head; }
 
-  virtual std::vector<layer::WordEmbedding> get_word_embedding() {
+  virtual layer::WordEmbedding get_word_embedding() {
     return model_->get_word_embedding();
   }
 
-  virtual void set_word_embedding(
-      std::vector<layer::WordEmbedding>& word_embedding) {
+  virtual void set_word_embedding(layer::WordEmbedding& word_embedding) {
     model_->set_word_embedding(word_embedding);
   }
 

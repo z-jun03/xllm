@@ -104,15 +104,12 @@ WorkerClient::estimate_kv_cache_capacity_async() {
 }
 
 folly::SemiFuture<std::optional<ForwardOutput>> WorkerClient::step_async(
-    const ForwardInput& inputs) {
-  // TODO to adapt multi stream parallel later
-  BatchedForwardInputs batched_fwd_inputs;
-  batched_fwd_inputs.micro_inputs = {std::move(inputs)};
-  return worker_->step_async(batched_fwd_inputs);
+    const ForwardInput& input) {
+  return worker_->step_async(input);
 }
 
 folly::SemiFuture<std::optional<RawForwardOutput>> WorkerClient::step_async(
-    const std::vector<RawForwardInput>& inputs) {
+    const RawForwardInput& inputs) {
   LOG(ERROR) << "Worker Method step_async with RawForwardInput param is "
                 "UnImplemented.";
 }

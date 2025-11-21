@@ -66,7 +66,7 @@ void WorkerService::set_worker(std::unique_ptr<Worker> worker) {
   initialized_ = true;
 }
 
-void WorkerService::step(BatchedForwardInputs& batched_fwd_inputs,
+void WorkerService::step(ForwardInput& fwd_input,
                          torch::Tensor& next_tokens,
                          torch::Tensor& logprobs,
                          torch::Tensor& top_tokens,
@@ -78,7 +78,7 @@ void WorkerService::step(BatchedForwardInputs& batched_fwd_inputs,
                          torch::Tensor& out_tokens,
                          torch::Tensor& out_logprobs) {
   // execute model
-  auto future = worker_->step_async(batched_fwd_inputs);
+  auto future = worker_->step_async(fwd_input);
 
   if (!options_.enable_schedule_overlap()) {
     auto forward_outputs = std::move(future).get();
@@ -142,10 +142,10 @@ void WorkerService::step(BatchedForwardInputs& batched_fwd_inputs,
           torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU);
       auto total_prefill_seq_len = 0;
       auto total_num_sequences = 0;
-      for (auto& input : batched_fwd_inputs.micro_inputs) {
-        total_num_sequences += input.input_params.num_sequences;
-        total_prefill_seq_len += input.input_params.prefill_seq_len;
-      }
+
+      total_num_sequences += fwd_input.input_params.num_sequences;
+      total_prefill_seq_len += fwd_input.input_params.prefill_seq_len;
+
       next_tokens =
           torch::arange(-1,
                         -1 * (total_num_sequences - total_prefill_seq_len + 1),
@@ -166,7 +166,7 @@ void WorkerService::create_polling_shm_thread(
        output_shm_manager = std::move(output_shm_manager)]() mutable {
         Timer timer;
         while (true) {
-          BatchedForwardInputs batched_fwd_inputs;
+          ForwardInput fwd_input;
           std::vector<ForwardInput> inputs;
           input_shm_manager->raw_input_read(inputs);
           timer.reset();
@@ -184,31 +184,9 @@ void WorkerService::create_polling_shm_thread(
           torch::Tensor out_tokens;
           torch::Tensor out_logprobs;
 
-          auto micro_batches_num = inputs.size();
-          batched_fwd_inputs.micro_inputs = std::move(inputs);
-          batched_fwd_inputs.concated_sampling_params =
-              batched_fwd_inputs.micro_inputs[0].sampling_params;
-          for (auto i = 1; i < micro_batches_num; ++i) {
-            batched_fwd_inputs.concated_sampling_params.concat(
-                batched_fwd_inputs.micro_inputs[i].sampling_params);
-          }
+          fwd_input = std::move(inputs[0]);
 
-          // concat acc_logprob here for beam search together
-          if (micro_batches_num > 1) {
-            std::vector<torch::Tensor> acc_logprob_vec;
-            acc_logprob_vec.reserve(micro_batches_num);
-            for (auto i = 0; i < micro_batches_num; ++i) {
-              acc_logprob_vec.push_back(
-                  batched_fwd_inputs.micro_inputs[i].acc_logprob);
-            }
-            batched_fwd_inputs.acc_logprob =
-                torch::cat(acc_logprob_vec, /*dim=*/-1);
-          } else {
-            batched_fwd_inputs.acc_logprob =
-                batched_fwd_inputs.micro_inputs[0].acc_logprob;
-          }
-
-          step(batched_fwd_inputs,
+          step(fwd_input,
                next_tokens,
                logprobs,
                top_tokens,
@@ -598,90 +576,58 @@ void WorkerService::UnlinkCluster(::google::protobuf::RpcController* controller,
   return;
 }
 
-void WorkerService::ExecuteModel(
-    ::google::protobuf::RpcController* controller,
-    const proto::BatchedForwardInputs* pb_batched_fwd_inputs,
-    proto::ForwardOutput* pb_forward_output,
-    ::google::protobuf::Closure* done) {
-  threadpool_->schedule([this,
-                         controller,
-                         pb_batched_fwd_inputs,
-                         pb_forward_output,
-                         done]() mutable {
-    brpc::ClosureGuard done_guard(done);
-    Timer timer;
-    // convert proto::BatchedForwardInputs to BatchedForwardInputs
-    auto micro_batches_num = pb_batched_fwd_inputs->micro_inputs().size();
-    BatchedForwardInputs batched_fwd_inputs;
-    batched_fwd_inputs.micro_inputs.reserve(micro_batches_num);
-    for (auto i = 0; i < micro_batches_num; ++i) {
-      ForwardInput forward_input;
-      proto_to_forward_input(&(pb_batched_fwd_inputs->micro_inputs()[i]),
-                             forward_input,
-                             options_.num_decoding_tokens());
-      batched_fwd_inputs.micro_inputs.push_back(std::move(forward_input));
-    }
+void WorkerService::ExecuteModel(::google::protobuf::RpcController* controller,
+                                 const proto::ForwardInput* pb_forward_input,
+                                 proto::ForwardOutput* pb_forward_output,
+                                 ::google::protobuf::Closure* done) {
+  threadpool_->schedule(
+      [this, controller, pb_forward_input, pb_forward_output, done]() mutable {
+        brpc::ClosureGuard done_guard(done);
+        // convert proto::ForwardInput to ForwardInput
 
-    // concat sampling parameters
-    batched_fwd_inputs.concated_sampling_params =
-        batched_fwd_inputs.micro_inputs[0].sampling_params;
-    for (auto i = 1; i < micro_batches_num; ++i) {
-      batched_fwd_inputs.concated_sampling_params.concat(
-          batched_fwd_inputs.micro_inputs[i].sampling_params);
-    }
+        Timer timer;
+        ForwardInput forward_input;
+        proto_to_forward_input(
+            pb_forward_input, forward_input, options_.num_decoding_tokens());
 
-    // concat acc_logprob here for beam search together
-    if (micro_batches_num > 1) {
-      std::vector<torch::Tensor> acc_logprob_vec;
-      acc_logprob_vec.reserve(micro_batches_num);
-      for (auto i = 0; i < micro_batches_num; ++i) {
-        acc_logprob_vec.push_back(
-            batched_fwd_inputs.micro_inputs[i].acc_logprob);
-      }
-      batched_fwd_inputs.acc_logprob = torch::cat(acc_logprob_vec, /*dim=*/-1);
-    } else {
-      batched_fwd_inputs.acc_logprob =
-          batched_fwd_inputs.micro_inputs[0].acc_logprob;
-    }
+        // model output
+        torch::Tensor next_tokens;
+        torch::Tensor logprobs;
+        torch::Tensor top_tokens;
+        torch::Tensor top_logprobs;
+        torch::Tensor embeddings;
+        torch::Tensor expert_load_data;
+        int32_t prepared_layer_id = -1;
+        // beam search kernel output
+        torch::Tensor src_seq_idxes;
+        torch::Tensor out_tokens;
+        torch::Tensor out_logprobs;
 
-    // model output
-    torch::Tensor next_tokens;
-    torch::Tensor logprobs;
-    torch::Tensor top_tokens;
-    torch::Tensor top_logprobs;
-    torch::Tensor embeddings;
-    torch::Tensor expert_load_data;
-    int32_t prepared_layer_id = -1;
-    // beam search kernel output
-    torch::Tensor src_seq_idxes;
-    torch::Tensor out_tokens;
-    torch::Tensor out_logprobs;
-
-    step(batched_fwd_inputs,
-         next_tokens,
-         logprobs,
-         top_tokens,
-         top_logprobs,
-         embeddings,
-         expert_load_data,
-         prepared_layer_id,
-         src_seq_idxes,
-         out_tokens,
-         out_logprobs);
-    // convert to proto output
-    forward_output_to_proto(next_tokens,
-                            logprobs,
-                            top_tokens,
-                            top_logprobs,
-                            embeddings,
-                            expert_load_data,
-                            prepared_layer_id,
-                            src_seq_idxes,
-                            out_tokens,
-                            out_logprobs,
-                            pb_forward_output);
-    COUNTER_ADD(worker_service_latency_seconds, timer.elapsed_seconds());
-  });
+        step(forward_input,
+             next_tokens,
+             logprobs,
+             top_tokens,
+             top_logprobs,
+             embeddings,
+             expert_load_data,
+             prepared_layer_id,
+             src_seq_idxes,
+             out_tokens,
+             out_logprobs);
+        // convert to proto output
+        forward_output_to_proto(next_tokens,
+                                logprobs,
+                                top_tokens,
+                                top_logprobs,
+                                embeddings,
+                                expert_load_data,
+                                prepared_layer_id,
+                                src_seq_idxes,
+                                out_tokens,
+                                out_logprobs,
+                                pb_forward_output);
+        COUNTER_ADD(worker_service_latency_seconds, timer.elapsed_seconds());
+      });
 }
 
 void WorkerService::GetLastStepResult(

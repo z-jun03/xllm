@@ -101,10 +101,10 @@ class AclGraphExecutorImpl : public ExecutorImpl {
   ForwardInput prepare_inputs(Batch& batch) override;
 
   // Execute model with graph optimization for decode phase
-  torch::Tensor run(const std::vector<torch::Tensor>& tokens,
-                    const std::vector<torch::Tensor>& positions,
+  torch::Tensor run(const torch::Tensor& tokens,
+                    const torch::Tensor& positions,
                     std::vector<KVCache>& kv_caches,
-                    const std::vector<ModelInputParams>& params) override;
+                    const ModelInputParams& params) override;
 
  private:
   // not own

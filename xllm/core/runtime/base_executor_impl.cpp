@@ -31,11 +31,10 @@ ForwardInput BaseExecutorImpl::prepare_inputs(Batch& batch) {
   return batch.prepare_forward_input(options_.num_decoding_tokens(), 0, args_);
 }
 
-torch::Tensor BaseExecutorImpl::run(
-    const std::vector<torch::Tensor>& tokens,
-    const std::vector<torch::Tensor>& positions,
-    std::vector<KVCache>& kv_caches,
-    const std::vector<ModelInputParams>& params) {
+torch::Tensor BaseExecutorImpl::run(const torch::Tensor& tokens,
+                                    const torch::Tensor& positions,
+                                    std::vector<KVCache>& kv_caches,
+                                    const ModelInputParams& params) {
   return model_->forward(tokens, positions, kv_caches, params);
 }
 

@@ -507,22 +507,14 @@ bool CommChannel::get_active_activation_memory_async(
 bool CommChannel::execute_model_with_brpc(
     const std::vector<RawForwardInput>& inputs,
     folly::Promise<std::optional<RawForwardOutput>>& promise) {
-  // convert to proto::BatchedForwardInputs
-  proto::BatchedForwardInputs pb_batched_fwd_inputs;
-  std::vector<proto::ForwardInput> batched_fwd_inputs_vec;
-  batched_fwd_inputs_vec.reserve(inputs.size());
-  for (auto i = 0; i < inputs.size(); ++i) {
-    proto::ForwardInput pb_fwd_input;
-    forward_input_to_proto(inputs[i], &pb_fwd_input);
-    batched_fwd_inputs_vec.push_back(std::move(pb_fwd_input));
-  }
-  ADD_VECTOR_TO_PROTO(pb_batched_fwd_inputs.mutable_micro_inputs(),
-                      batched_fwd_inputs_vec);
+  // convert to proto::ForwardInput
+  proto::ForwardInput pb_forward_input;
+  forward_input_to_proto(inputs[0], &pb_forward_input);
+
   // call ExecuteModel with callback
   auto done = new ExecuteModelClosure();
   done->promise = std::move(promise);
-  stub_->ExecuteModel(
-      &done->cntl, &pb_batched_fwd_inputs, &done->pb_output, done);
+  stub_->ExecuteModel(&done->cntl, &pb_forward_input, &done->pb_output, done);
   return true;
 }
 

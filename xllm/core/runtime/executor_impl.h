@@ -38,10 +38,10 @@ class ExecutorImpl {
   // tokens: vector size is dp_size, each element is [num_tokens/dp_size]
   // positions: vector size is dp_size, each element is [num_tokens/dp_size]
   // token pos in the sequence returns: [num_tokens, hidden_size]
-  virtual torch::Tensor run(const std::vector<torch::Tensor>& tokens,
-                            const std::vector<torch::Tensor>& positions,
+  virtual torch::Tensor run(const torch::Tensor& tokens,
+                            const torch::Tensor& positions,
                             std::vector<KVCache>& kv_caches,
-                            const std::vector<ModelInputParams>& params) = 0;
+                            const ModelInputParams& params) = 0;
 };
 
 }  // namespace xllm

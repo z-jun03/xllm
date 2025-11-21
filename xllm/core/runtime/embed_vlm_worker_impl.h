@@ -40,8 +40,7 @@ class EmbedVLMWorkerImpl : public WorkerImpl {
 
   bool init_model(ModelContext& context) override;
 
-  std::optional<ForwardOutput> step(
-      const BatchedForwardInputs& inputs) override;
+  std::optional<ForwardOutput> step(const ForwardInput& input) override;
 };
 
 }  // namespace xllm

@@ -53,9 +53,8 @@ class Glm4MoeDecoderImpl : public NpuBaseLayer {
                         KVCache& kv_cache,
                         const ModelInputParams& input_params,
                         torch::Tensor& expert_array,
-                        std::vector<aclrtEvent*> event = {nullptr, nullptr},
-                        std::vector<std::atomic<bool>*> event_flag = {nullptr,
-                                                                      nullptr},
+                        aclrtEvent* event = nullptr,
+                        std::atomic<bool>* event_flag = nullptr,
                         int node_id = 0);
 
  private:

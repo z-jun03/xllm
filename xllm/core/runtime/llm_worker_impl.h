@@ -42,18 +42,17 @@ class LLMWorkerImpl : public WorkerImpl {
   // initialize model, cache manager. blocking call
   bool init_model(ModelContext& context) override;
 
-  std::optional<ForwardOutput> step(
-      const BatchedForwardInputs& inputs) override;
+  std::optional<ForwardOutput> step(const ForwardInput& input) override;
 
   layer::LmHead get_lm_head() { return model_->get_lm_head(); };
 
   void set_lm_head(layer::LmHead& head) { model_->set_lm_head(head); };
 
-  std::vector<layer::WordEmbedding> get_word_embedding() {
+  layer::WordEmbedding get_word_embedding() {
     return model_->get_word_embedding();
   };
 
-  void set_word_embedding(std::vector<layer::WordEmbedding>& embedding) {
+  void set_word_embedding(layer::WordEmbedding& embedding) {
     model_->set_word_embedding(embedding);
   };
 

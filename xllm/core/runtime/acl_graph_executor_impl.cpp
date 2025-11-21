@@ -187,15 +187,14 @@ ForwardInput AclGraphExecutorImpl::prepare_inputs(Batch& batch) {
 // tokens: [num_decode_tokens]
 // positions: [num_decode_tokens] token pos in the sequence
 // returns: [num_decode_tokens, hidden_size]
-torch::Tensor AclGraphExecutorImpl::run(
-    const std::vector<torch::Tensor>& tokens,
-    const std::vector<torch::Tensor>& positions,
-    std::vector<KVCache>& kv_caches,
-    const std::vector<ModelInputParams>& params) {
+torch::Tensor AclGraphExecutorImpl::run(const torch::Tensor& tokens,
+                                        const torch::Tensor& positions,
+                                        std::vector<KVCache>& kv_caches,
+                                        const ModelInputParams& params) {
   // no mirco batch in decode phase
-  const torch::Tensor& tokens_tensor = tokens[0];
-  const torch::Tensor& positions_tensor = positions[0];
-  const ModelInputParams& params_single = params[0];
+  const torch::Tensor& tokens_tensor = tokens;
+  const torch::Tensor& positions_tensor = positions;
+  const ModelInputParams& params_single = params;
   // Identify decode phase using q_max_seq_len for precise detection
   // Decode phase: all sequences have q_seq_len == 1 (generating one token at a
   // time) Prefill phase: sequences have q_seq_len > 1 (processing multiple
@@ -229,10 +228,7 @@ torch::Tensor AclGraphExecutorImpl::run(
 
   // Combined condition for graph capture support
   // ACL graph executor only supports single tensor inputs (no micro-batching)
-  const bool single_input =
-      (tokens.size() == 1) && (positions.size() == 1) && (params.size() == 1);
-  const bool capture_supported =
-      single_input && seq_len_supported && same_num_decoding_tokens;
+  const bool capture_supported = seq_len_supported && same_num_decoding_tokens;
 
   // Early return if conditions are not suitable for graph operations
   if (!capture_supported) {

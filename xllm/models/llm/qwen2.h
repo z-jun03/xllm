@@ -47,12 +47,11 @@ class QWen2ModelImpl : public LlmModelImplBase<QWen2DecoderLayer> {
     blocks_ = register_module("layers", torch::nn::ModuleList());
     layers_.reserve(model_args.n_layers());
     norm_ = register_module("norm", layer::RmsNorm(context));
-    for (auto i = 0; i < FLAGS_micro_batch_num; i++) {
-      embed_tokens_.push_back(layer::WordEmbedding(context));
+    embed_tokens_ =
+        register_module("embed_tokens", layer::WordEmbedding(context));
 #if defined(USE_NPU)
-      atb_pos_embeds_.push_back(layer::PosEmbedding(context));
+    atb_pos_emb_ = layer::PosEmbedding(context);
 #endif
-    }
     cos_sin_ = get_concat_rotary_embedding(
         model_args.hidden_size() / model_args.n_heads(),
         model_args.max_position_embeddings(),

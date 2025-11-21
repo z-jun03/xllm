@@ -111,7 +111,7 @@ class WorkerService : public proto::DistributeWorker {
                      ::google::protobuf::Closure* done) override;
 
   void ExecuteModel(::google::protobuf::RpcController* controller,
-                    const proto::BatchedForwardInputs* pb_batched_fwd_inputs,
+                    const proto::ForwardInput* pb_fwd_input,
                     proto::ForwardOutput* pb_forward_output,
                     ::google::protobuf::Closure* done) override;
 
@@ -126,7 +126,7 @@ class WorkerService : public proto::DistributeWorker {
                                  ::google::protobuf::Closure* done) override;
 
  private:
-  void step(BatchedForwardInputs& batched_fwd_inputs,
+  void step(ForwardInput& fwd_input,
             torch::Tensor& next_tokens,
             torch::Tensor& logprobs,
             torch::Tensor& top_tokens,

@@ -124,16 +124,11 @@ class DeepseekV2ModelImpl : public torch::nn::Module {
   }
 
   // Provide batched signature to satisfy callers that pass vectors
-  torch::Tensor forward(const std::vector<torch::Tensor>& tokens,
-                        const std::vector<torch::Tensor>& positions,
+  torch::Tensor forward(const torch::Tensor& tokens,
+                        const torch::Tensor& positions,
                         std::vector<KVCache>& kv_caches,
-                        const std::vector<ModelInputParams>& input_params) {
-    if (!(tokens.size() == 1 && positions.size() == 1 &&
-          input_params.size() == 1)) {
-      LOG(FATAL)
-          << "DeepseekV2ModelImpl only supports micro-batch size == 1 for now";
-    }
-    return forward_native(tokens[0], positions[0], kv_caches, input_params[0]);
+                        const ModelInputParams& input_params) {
+    return forward_native(tokens, positions, kv_caches, input_params);
   }
 
   // load the weight from the checkpoint
@@ -148,12 +143,10 @@ class DeepseekV2ModelImpl : public torch::nn::Module {
     norm_->load_state_dict(state_dict.get_dict_with_prefix("norm."));
   }
 
-  std::vector<layer::WordEmbedding> get_word_embedding() {
-    return {embed_tokens_};
-  }
+  layer::WordEmbedding get_word_embedding() { return embed_tokens_; }
 
-  void set_word_embedding(std::vector<layer::WordEmbedding>& word_embedding) {
-    embed_tokens_ = word_embedding[0];
+  void set_word_embedding(layer::WordEmbedding& word_embedding) {
+    embed_tokens_ = word_embedding;
   }
 
  private:

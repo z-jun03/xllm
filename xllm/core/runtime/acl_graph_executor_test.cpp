@@ -187,19 +187,11 @@ class SimpleCausalLM : public CausalLM {
   }
 
   // Adapter method to match CausalLM base class interface
-  torch::Tensor forward(
-      const std::vector<torch::Tensor>& tokens,
-      const std::vector<torch::Tensor>& positions,
-      std::vector<KVCache>& kv_caches,
-      const std::vector<ModelInputParams>& parameters) override {
-    // For SimpleCausalLM, we expect single tensor inputs
-    CHECK_EQ(tokens.size(), 1) << "SimpleCausalLM expects single token tensor";
-    CHECK_EQ(positions.size(), 1)
-        << "SimpleCausalLM expects single position tensor";
-    CHECK_EQ(parameters.size(), 1)
-        << "SimpleCausalLM expects single parameter set";
-
-    return forward_impl(tokens[0], positions[0], kv_caches, parameters[0]);
+  torch::Tensor forward(const torch::Tensor& tokens,
+                        const torch::Tensor& positions,
+                        std::vector<KVCache>& kv_caches,
+                        const ModelInputParams& parameters) override {
+    return forward_impl(tokens, positions, kv_caches, parameters);
   }
 
   const torch::TensorOptions& options() const override {
@@ -243,13 +235,12 @@ class SimpleCausalLM : public CausalLM {
     // Simple implementation for testing
   }
 
-  std::vector<layer::WordEmbedding> get_word_embedding() override {
+  layer::WordEmbedding get_word_embedding() override {
     // Simple implementation for testing
-    return std::vector<layer::WordEmbedding>{layer::WordEmbedding(nullptr)};
+    return layer::WordEmbedding(nullptr);
   }
 
-  void set_word_embedding(
-      std::vector<layer::WordEmbedding>& embedding) override {
+  void set_word_embedding(layer::WordEmbedding& embedding) override {
     // Simple implementation for testing
   }
 

@@ -254,7 +254,7 @@ service DistributeWorker {
   rpc GetCacheInfo(Empty) returns (CacheInfo) {}
   rpc LinkCluster(ClusterInfo) returns (Status) {}
   rpc UnlinkCluster(ClusterInfo) returns (Status) {}
-  rpc ExecuteModel (BatchedForwardInputs) returns (ForwardOutput);
+  rpc ExecuteModel (ForwardInput) returns (ForwardOutput);
   rpc GetLastStepResult (Empty) returns (ForwardOutput);
   rpc GetActiveActivationMemory (Empty) returns (ActivationMemory);
   rpc TransferBlocks(BlockTransferInfos) returns (TransferStatus) {}

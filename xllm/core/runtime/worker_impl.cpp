@@ -418,114 +418,102 @@ ForwardInput WorkerImpl::update_input_by_last_step_output(
   return inputs;
 }
 
-void WorkerImpl::prepare_work_before_execute(
-    const BatchedForwardInputs& inputs,
-    BatchedForwardInputs& processed_inputs) {
+void WorkerImpl::prepare_work_before_execute(const ForwardInput& input,
+                                             ForwardInput& processed_input) {
   c10::StreamGuard streamGuard = prepare_stream_->set_stream_guard();
 
-  for (auto i = 0; i < inputs.micro_inputs.size(); ++i) {
-    ForwardInput fwd_inputs_on_device;
-    fwd_inputs_on_device = inputs.micro_inputs[i].to(device_, dtype_);
-    auto& input_params = fwd_inputs_on_device.input_params;
+  processed_input = input.to(device_, dtype_);
+  auto& input_params = processed_input.input_params;
 #if defined(USE_NPU)
-    if (input_params.swap_blocks.size() > 0 &&
-        !FLAGS_enable_block_copy_kernel) {
-      auto& swap_blocks = input_params.swap_blocks;
+  if (input_params.swap_blocks.size() > 0 && !FLAGS_enable_block_copy_kernel) {
+    auto& swap_blocks = input_params.swap_blocks;
 
-      // collect src and dst indices
-      std::vector<int64_t> src_indices, dst_indices;
-      src_indices.reserve(swap_blocks.size());
-      dst_indices.reserve(swap_blocks.size());
+    // collect src and dst indices
+    std::vector<int64_t> src_indices, dst_indices;
+    src_indices.reserve(swap_blocks.size());
+    dst_indices.reserve(swap_blocks.size());
 
-      for (const auto& block : swap_blocks) {
-        src_indices.push_back(block.src_block_id);
-        dst_indices.push_back(block.dst_block_id);
-      }
-
-      // batch select keys and values
-      auto src_tensor = torch::tensor(
-          src_indices, torch::dtype(torch::kLong).device(device_));
-      auto dst_tensor = torch::tensor(
-          dst_indices, torch::dtype(torch::kLong).device(device_));
-      const int64_t num_layers = context_.get_model_args().n_layers();
-      for (int layer_id = 0; layer_id < num_layers; layer_id++) {
-        kv_caches_[layer_id].swap_blocks(src_tensor, dst_tensor);
-      }
+    for (const auto& block : swap_blocks) {
+      src_indices.push_back(block.src_block_id);
+      dst_indices.push_back(block.dst_block_id);
     }
-    if (!context_.get_parallel_args().mapping_data().empty()) {
-      torch::Tensor token_size_per_dp_group =
-          torch::tensor(fwd_inputs_on_device.input_params.dp_global_token_nums,
-                        torch::TensorOptions()
-                            .device(torch::kCPU)
-                            .dtype(torch::kInt32)
-                            .pinned_memory(true));
-      bool is_prefill = fwd_inputs_on_device.input_params.global_empty_kv_cache
-                            ? true
-                            : false;
-      DpEpPadding dp_ep_padding(token_size_per_dp_group,
-                                context_.get_model_args().num_experts_per_tok(),
-                                context_.get_parallel_args().mapping_data(),
-                                device_,
-                                dtype_,
-                                is_prefill);
-      fwd_inputs_on_device.input_params.dp_ep_padding_data =
-          dp_ep_padding.build();
-      if (FLAGS_enable_eplb) {
-        // expert_load_data_.fill_(0);
-        fwd_inputs_on_device.input_params.expert_load_data = expert_load_data_;
-      }
+
+    // batch select keys and values
+    auto src_tensor =
+        torch::tensor(src_indices, torch::dtype(torch::kLong).device(device_));
+    auto dst_tensor =
+        torch::tensor(dst_indices, torch::dtype(torch::kLong).device(device_));
+    const int64_t num_layers = context_.get_model_args().n_layers();
+    for (int layer_id = 0; layer_id < num_layers; layer_id++) {
+      kv_caches_[layer_id].swap_blocks(src_tensor, dst_tensor);
     }
-#endif
-    processed_inputs.micro_inputs.push_back(std::move(fwd_inputs_on_device));
   }
-  processed_inputs.concated_sampling_params =
-      inputs.concated_sampling_params.to(device_, dtype_);
-  if (inputs.acc_logprob.defined()) {
-    processed_inputs.acc_logprob =
-        inputs.acc_logprob.to(torch::kFloat32).to(device_);
+
+  if (!context_.get_parallel_args().mapping_data().empty()) {
+    torch::Tensor token_size_per_dp_group =
+        torch::tensor(processed_input.input_params.dp_global_token_nums,
+                      torch::TensorOptions()
+                          .device(torch::kCPU)
+                          .dtype(torch::kInt32)
+                          .pinned_memory(true));
+    bool is_prefill =
+        processed_input.input_params.global_empty_kv_cache ? true : false;
+    DpEpPadding dp_ep_padding(token_size_per_dp_group,
+                              context_.get_model_args().num_experts_per_tok(),
+                              context_.get_parallel_args().mapping_data(),
+                              device_,
+                              dtype_,
+                              is_prefill);
+    processed_input.input_params.dp_ep_padding_data = dp_ep_padding.build();
+    if (FLAGS_enable_eplb) {
+      // expert_load_data_.fill_(0);
+      processed_input.input_params.expert_load_data = expert_load_data_;
+    }
+  }
+#endif
+
+  processed_input.sampling_params = input.sampling_params.to(device_, dtype_);
+  if (input.acc_logprob.defined()) {
+    processed_input.acc_logprob =
+        input.acc_logprob.to(torch::kFloat32).to(device_);
   }
   auto ret = prepare_stream_->synchronize();
 }
 
 folly::SemiFuture<std::optional<ForwardOutput>> WorkerImpl::step_async(
-    const BatchedForwardInputs& inputs) {
-  BatchedForwardInputs batched_inputs_on_device;
-  batched_inputs_on_device.micro_inputs.reserve(inputs.micro_inputs.size());
+    const ForwardInput& input) {
+  ForwardInput input_on_device;
 
-  prepare_work_before_execute(inputs, batched_inputs_on_device);
+  prepare_work_before_execute(input, input_on_device);
 
   folly::Promise<std::optional<ForwardOutput>> promise;
   auto future = promise.getSemiFuture();
   threadpool_.schedule([this,
-                        inputs = std::move(batched_inputs_on_device),
+                        input = std::move(input_on_device),
                         promise = std::move(promise)]() mutable {
 #if defined(USE_NPU)
-    for (auto& input : inputs.micro_inputs) {
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (layer_wise_load_synchronizer_.count(input.input_params.batch_id) !=
-            0) {
-          input.input_params.layer_wise_load_synchronizer = std::move(
-              layer_wise_load_synchronizer_[input.input_params.batch_id]);
-          layer_wise_load_synchronizer_.erase(input.input_params.batch_id);
-        }
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (layer_wise_load_synchronizer_.count(input.input_params.batch_id) !=
+          0) {
+        input.input_params.layer_wise_load_synchronizer = std::move(
+            layer_wise_load_synchronizer_[input.input_params.batch_id]);
+        layer_wise_load_synchronizer_.erase(input.input_params.batch_id);
       }
     }
+
 #endif
     // run the model on the given input in working thread
     if (!enable_schedule_overlap()) {
-      const auto output = this->step(inputs);
+      const auto output = this->step(input);
       promise.setValue(output);
     } else {
-      for (auto i = 0; i < inputs.micro_inputs.size(); ++i) {
-        if (last_step_output_valid_ &&
-            !inputs.micro_inputs[i].input_params.empty_kv_cache) {
-          // replace step i model input with true output of step i-1
-          inputs.micro_inputs[i] =
-              update_input_by_last_step_output(inputs.micro_inputs[i]);
-        }
+      if (last_step_output_valid_ && !input.input_params.empty_kv_cache) {
+        // replace step i model input with true output of step i-1
+        input = update_input_by_last_step_output(input);
       }
-      const auto output = this->step(inputs);
+
+      const auto output = this->step(input);
       if (output.has_value()) {
         if (is_driver() || FLAGS_enable_eplb) {
           std::unique_lock<std::mutex> lock(mtx_);

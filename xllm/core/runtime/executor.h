@@ -44,10 +44,10 @@ class Executor final {
   // tokens: vector size is dp_size, each element is [num_tokens/dp_size]
   // positions: vector size is dp_size, each element is [num_tokens/dp_size]
   // token pos in the sequence returns: [num_tokens, hidden_size]
-  torch::Tensor forward(const std::vector<torch::Tensor>& tokens,
-                        const std::vector<torch::Tensor>& positions,
+  torch::Tensor forward(const torch::Tensor& tokens,
+                        const torch::Tensor& positions,
                         std::vector<KVCache>& kv_caches,
-                        const std::vector<ModelInputParams>& params);
+                        const ModelInputParams& params);
 
  private:
   std::unique_ptr<ExecutorImpl> impl_;

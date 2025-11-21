@@ -90,11 +90,10 @@ class SpeculativeWorkerImpl : public WorkerImpl {
   };
 
   // prepare work before model execution
-  void prepare_work_before_execute(const BatchedForwardInputs& inputs,
-                                   BatchedForwardInputs& new_inputs) override;
+  void prepare_work_before_execute(const ForwardInput& input,
+                                   ForwardInput& new_input) override;
 
-  std::optional<ForwardOutput> step(
-      const BatchedForwardInputs& inputs) override;
+  std::optional<ForwardOutput> step(const ForwardInput& input) override;
 
   ForwardInput update_input_by_last_step_output(ForwardInput& inputs) override;
 
@@ -114,26 +113,26 @@ class SpeculativeWorkerImpl : public WorkerImpl {
   };
 
  private:
-  std::optional<ForwardOutput> step_prefill(const BatchedForwardInputs& inputs);
+  std::optional<ForwardOutput> step_prefill(const ForwardInput& input);
 
-  std::optional<ForwardOutput> step_decode(const BatchedForwardInputs& inputs);
+  std::optional<ForwardOutput> step_decode(const ForwardInput& inputs);
 
   // When enable DP, inputs sometimes be empty but model need to execute.
-  std::optional<ForwardOutput> step_empty(const BatchedForwardInputs& inputs);
+  std::optional<ForwardOutput> step_empty(const ForwardInput& inputs);
 
   // prepare inputs for draft model at Prefill phase.
-  void prepare_prefill_inputs(const BatchedForwardInputs& inputs,
-                              BatchedForwardInputs& prefill_inputs);
+  void prepare_prefill_inputs(const ForwardInput& inputs,
+                              ForwardInput& prefill_inputs);
 
   // prepare inputs for draft model at Decode phase.
-  void prepare_draft_inputs(const BatchedForwardInputs& inputs,
-                            BatchedForwardInputs& draft_inputs,
+  void prepare_draft_inputs(const ForwardInput& inputs,
+                            ForwardInput& draft_inputs,
                             const int64_t offset,
                             const torch::Device device);
 
   // prepare inputs for target model at Decode phase.
-  void prepare_validate_inputs(const BatchedForwardInputs& inputs,
-                               BatchedForwardInputs& validate_inputs,
+  void prepare_validate_inputs(const ForwardInput& inputs,
+                               ForwardInput& validate_inputs,
                                bool enable_schedule_overlap);
 
   SampleOutput validate(const SamplingParameters& sampling_params,

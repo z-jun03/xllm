@@ -118,8 +118,7 @@ class LLMEngine : public Engine {
   bool allocate_kv_cache(const Engine::KVCacheCapacity& kv_cache_cap);
   bool allocate_continuous_kv_cache(
       const Engine::KVCacheCapacity& kv_cache_cap);
-  std::vector<std::vector<RawForwardInput>> prepare_inputs(
-      std::vector<Batch>& batch);
+  std::vector<RawForwardInput> prepare_inputs(std::vector<Batch>& batch);
   void process_group_test();
 
  protected:

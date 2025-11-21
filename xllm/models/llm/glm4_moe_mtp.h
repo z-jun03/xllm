@@ -147,11 +147,11 @@ class Glm4MoeMtpModelImpl : public torch::nn::Module {
         torch::TensorOptions().dtype(torch::kInt32).device(tokens.device()));
 
     for (size_t i = 0; i < layers_.size(); i++) {
-      std::vector<aclrtEvent*> events(1, nullptr);
-      std::vector<std::atomic<bool>*> event_flags(1, nullptr);
+      aclrtEvent* event = nullptr;
+      std::atomic<bool>* event_flag = nullptr;
       if (input_params.layer_synchronizer != nullptr) {
-        events[0] = input_params.layer_synchronizer->get_event(i);
-        event_flags[0] = input_params.layer_synchronizer->get_event_flag(i);
+        event = input_params.layer_synchronizer->get_event(i);
+        event_flag = input_params.layer_synchronizer->get_event_flag(i);
       }
       // TODO(liangzhiwei20): MTP need more support for layer wise copy.
       if (input_params.layer_wise_load_synchronizer != nullptr) {
@@ -168,8 +168,8 @@ class Glm4MoeMtpModelImpl : public torch::nn::Module {
             kv_caches[i],
             input_params,
             expert_array,
-            events,
-            event_flags);
+            event,
+            event_flag);
     }
     return final_norm_(h, 0);
   }
@@ -212,12 +212,10 @@ class Glm4MoeMtpModelImpl : public torch::nn::Module {
     final_norm_->merge_loaded_weights();
   }
 
-  std::vector<layer::WordEmbedding> get_word_embedding() {
-    return {embed_tokens_};
-  }
+  layer::WordEmbedding get_word_embedding() { return embed_tokens_; }
 
-  void set_word_embedding(std::vector<layer::WordEmbedding>& word_embedding) {
-    embed_tokens_ = word_embedding[0];
+  void set_word_embedding(layer::WordEmbedding& word_embedding) {
+    embed_tokens_ = word_embedding;
   }
 
  private:
@@ -254,11 +252,11 @@ class Glm4MoeMtpForCausalLMImpl : public torch::nn::Module {
   // tokens: [num_tokens]
   // positions: [num_tokens] token pos in the sequence
   // returns: [num_tokens, hidden_size]
-  torch::Tensor forward(const std::vector<torch::Tensor>& tokens,
-                        const std::vector<torch::Tensor>& positions,
+  torch::Tensor forward(const torch::Tensor& tokens,
+                        const torch::Tensor& positions,
                         std::vector<KVCache>& kv_caches,
-                        const std::vector<ModelInputParams>& input_params) {
-    return model_(tokens[0], positions[0], kv_caches, input_params[0]);
+                        const ModelInputParams& input_params) {
+    return model_(tokens, positions, kv_caches, input_params);
   }
 
   // hidden_states: [num_tokens, hidden_size]
@@ -294,11 +292,11 @@ class Glm4MoeMtpForCausalLMImpl : public torch::nn::Module {
 
   void set_lm_head(layer::LmHead& head) { lm_head_ = head; }
 
-  std::vector<layer::WordEmbedding> get_word_embedding() {
+  layer::WordEmbedding get_word_embedding() {
     return model_->get_word_embedding();
   }
 
-  void set_word_embedding(std::vector<layer::WordEmbedding>& word_embedding) {
+  void set_word_embedding(layer::WordEmbedding& word_embedding) {
     model_->set_word_embedding(word_embedding);
   }
 

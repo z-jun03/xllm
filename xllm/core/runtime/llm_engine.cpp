@@ -43,15 +43,20 @@ limitations under the License.
 namespace xllm {
 
 namespace {
-uint32_t determine_micro_batches_num(const std::vector<Batch>& batch) {
-  bool not_all_in_decode =
-      std::any_of(batch.begin(), batch.end(), [](const Batch& one_batch) {
-        return one_batch.get_batch_prefill_status();
-      });
-  if (not_all_in_decode && FLAGS_enable_multi_stream_parallel) {
-    return 2;
+void try_to_enable_mla(const std::vector<RawForwardInput>& raw_forward_inputs) {
+  static bool set_enable_mla = FLAGS_enable_customize_mla_kernel;
+  // decode phase with tokens more than this limit will lead to error in
+  // customize mla kernel. once detect any input exceed the limit, fall back to
+  // default kernel.
+  const int num_tokens_limit = 230;
+  if (set_enable_mla) {
+    FLAGS_enable_customize_mla_kernel =
+        std::all_of(raw_forward_inputs.begin(),
+                    raw_forward_inputs.end(),
+                    [](const RawForwardInput& input) {
+                      return input.flatten_tokens_vec.size() < num_tokens_limit;
+                    });
   }
-  return 1;
 }
 }  // namespace
 
@@ -705,38 +710,21 @@ ForwardOutput LLMEngine::step(std::vector<Batch>& batch) {
       << "Split DP batch failed with dp_size as " << dp_size_
       << " and actual batch size as " << batch.size() << ".";
 
-  // prepare input with DP and multi-stream parallel, 2-D micro batches
-  // batched_raw_forward_inputs[dp_size][micro_batch_size]
-  // currently we use two batch overlap(TBO), each micro_batch_size is 2.
-  auto batched_raw_forward_inputs = prepare_inputs(batch);
-  DCHECK(dp_size_ == batched_raw_forward_inputs.size())
-      << "The processed raw forward inputs size "
-      << batched_raw_forward_inputs.size() << " is not equal to dp size "
-      << dp_size_ << ".";
-  static bool set_enable_mla = FLAGS_enable_customize_mla_kernel;
-  // decode phase with tokens more than this limit will lead to error in
-  // customize mla kernel. once detect any input exceed the limit, fall back to
-  // default kernel.
-  const int num_tokens_limit = 230;
-  if (set_enable_mla) {
-    FLAGS_enable_customize_mla_kernel = std::all_of(
-        batched_raw_forward_inputs.begin(),
-        batched_raw_forward_inputs.end(),
-        [](const std::vector<RawForwardInput>& inputs) {
-          return std::all_of(
-              inputs.begin(), inputs.end(), [](const RawForwardInput& input) {
-                return input.flatten_tokens_vec.size() < num_tokens_limit;
-              });
-        });
-  }
+  auto raw_forward_inputs = prepare_inputs(batch);
+  DCHECK(dp_size_ == raw_forward_inputs.size())
+      << "The processed raw forward inputs size " << raw_forward_inputs.size()
+      << " is not equal to dp size " << dp_size_ << ".";
+
+  try_to_enable_mla(raw_forward_inputs);
+
   std::vector<folly::SemiFuture<std::optional<RawForwardOutput>>> futures;
   futures.reserve(worker_clients_num_);
 
   // update dp related global paramters and then execute model
   for (auto worker_rank = 0; worker_rank < worker_clients_num_; ++worker_rank) {
     auto dp_rank = worker_rank / dp_local_tp_size_;
-    futures.emplace_back(worker_clients_[worker_rank]->step_async(
-        batched_raw_forward_inputs[dp_rank]));
+    futures.emplace_back(
+        worker_clients_[worker_rank]->step_async(raw_forward_inputs[dp_rank]));
   }
 
   // wait for the all future to complete
@@ -873,53 +861,37 @@ void LLMEngine::process_eplb_data(
   eplb_manager_->update_expert_load(tensors);
 }
 
-std::vector<std::vector<RawForwardInput>> LLMEngine::prepare_inputs(
+std::vector<RawForwardInput> LLMEngine::prepare_inputs(
     std::vector<Batch>& batch) {
-  // this is a nested 2-D inputs, with outer dimension indicates dp batches,
-  // inner dimension indicates multi-stream parallel micro batches
-  std::vector<std::vector<RawForwardInput>> batched_inputs(dp_size_);
-  // determine micro batches number with current batch prefill/decode status
-  auto micro_batches_num = determine_micro_batches_num(batch);
-
+  std::vector<RawForwardInput> batched_inputs;
+  batched_inputs.reserve(dp_size_);
   // some dp related variables
-  std::vector<std::vector<int32_t>> dp_global_token_nums;
-  dp_global_token_nums.resize(micro_batches_num,
-                              std::vector<int32_t>(dp_size_));
+  std::vector<int32_t> dp_global_token_nums;
+  dp_global_token_nums.resize(dp_size_);
   bool global_empty_kv_cache = true;
-
-  // eplb related
-  EplbInfo eplb_info;
 
   // build model input for every single micro batch
   for (auto dp_rank = 0; dp_rank < dp_size_; ++dp_rank) {
-    // calculate micro batch split indexes
-    auto split_seq_index = xllm::util::cal_vec_split_index(
-        batch[dp_rank].size(), micro_batches_num);
-    for (auto i = 0; i < micro_batches_num; ++i) {
-      batched_inputs[dp_rank].push_back(
-          std::move(batch[dp_rank].prepare_forward_input(split_seq_index[i],
-                                                         split_seq_index[i + 1],
-                                                         args_,
-                                                         threadpool_.get())));
-      dp_global_token_nums[i][dp_rank] =
-          batched_inputs[dp_rank][i].flatten_tokens_vec.size();
-      global_empty_kv_cache =
-          batched_inputs[dp_rank][i].empty_kv_cache && global_empty_kv_cache;
-    }
+    batched_inputs.emplace_back(std::move(batch[dp_rank].prepare_forward_input(
+        0, batch[dp_rank].size(), args_, threadpool_.get())));
+    dp_global_token_nums[dp_rank] =
+        batched_inputs[dp_rank].flatten_tokens_vec.size();
+    global_empty_kv_cache =
+        batched_inputs[dp_rank].empty_kv_cache && global_empty_kv_cache;
   }
 
+  // eplb related
+  EplbInfo eplb_info;
   if (FLAGS_enable_eplb) {
     eplb_info = eplb_manager_->get_eplb_info();
   }
 
   // update dp_global_token_nums and global_empty_kv_cache
   for (auto dp_rank = 0; dp_rank < dp_size_; ++dp_rank) {
-    for (auto i = 0; i < micro_batches_num; ++i) {
-      batched_inputs[dp_rank][i].dp_global_token_nums = dp_global_token_nums[i];
-      batched_inputs[dp_rank][i].global_empty_kv_cache = global_empty_kv_cache;
-      if (FLAGS_enable_eplb) {
-        batched_inputs[dp_rank][i].eplb_info = eplb_info;
-      }
+    batched_inputs[dp_rank].dp_global_token_nums = dp_global_token_nums;
+    batched_inputs[dp_rank].global_empty_kv_cache = global_empty_kv_cache;
+    if (FLAGS_enable_eplb) {
+      batched_inputs[dp_rank].eplb_info = eplb_info;
     }
   }
 

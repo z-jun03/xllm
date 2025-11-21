@@ -54,17 +54,13 @@ bool VLMWorkerImpl::init_model(ModelContext& context) {
   return true;
 }
 
-std::optional<ForwardOutput> VLMWorkerImpl::step(
-    const BatchedForwardInputs& inputs) {
+std::optional<ForwardOutput> VLMWorkerImpl::step(const ForwardInput& input) {
   Timer timer;
   // TODO guojinrong, to adapt multi stream parallel later
   // call model executor forward to get hidden states
-  auto hidden_states =
-      model_executor_->forward({inputs.micro_inputs[0].token_ids},
-                               {inputs.micro_inputs[0].positions},
-                               kv_caches_,
-                               {inputs.micro_inputs[0].input_params});
-  auto& sampling_params = inputs.micro_inputs[0].sampling_params;
+  auto hidden_states = model_executor_->forward(
+      input.token_ids, input.positions, kv_caches_, input.input_params);
+  auto& sampling_params = input.sampling_params;
   torch::Tensor logits;
   if (sampling_params.selected_token_idxes.defined()) {
     logits =

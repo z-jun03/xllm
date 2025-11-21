@@ -1073,17 +1073,16 @@ int64_t Glm4MoeDecoderImpl::init_node(atb_speed::Model::Node& node,
   return atb::NO_ERROR;
 }
 
-torch::Tensor Glm4MoeDecoderImpl::forward(
-    torch::Tensor& x,
-    torch::Tensor& cos_pos,
-    torch::Tensor& sin_pos,
-    torch::Tensor& attn_mask,
-    KVCache& kv_cache,
-    const ModelInputParams& input_params,
-    torch::Tensor& expert_array,
-    std::vector<aclrtEvent*> event,
-    std::vector<std::atomic<bool>*> event_flag,
-    int node_id) {
+torch::Tensor Glm4MoeDecoderImpl::forward(torch::Tensor& x,
+                                          torch::Tensor& cos_pos,
+                                          torch::Tensor& sin_pos,
+                                          torch::Tensor& attn_mask,
+                                          KVCache& kv_cache,
+                                          const ModelInputParams& input_params,
+                                          torch::Tensor& expert_array,
+                                          aclrtEvent* event,
+                                          std::atomic<bool>* event_flag,
+                                          int node_id) {
   atb::Status st;
   if (input_params.decode_seq_range.second !=
       input_params.q_seq_lens.size(0) - 1) {
