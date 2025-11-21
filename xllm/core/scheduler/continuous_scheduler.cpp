@@ -797,7 +797,11 @@ std::vector<Batch> ContinuousScheduler::prepare_batch() {
                            running_sequences_budgets_,
                            kv_cache_manager_->get_swap_block_transfer_infos());
 
-  if (!batches[0].empty()) {
+  bool is_batches_empty =
+      (std::all_of(batches.begin(), batches.end(), [](const Batch& one_batch) {
+        return one_batch.empty();
+      }));
+  if (!is_batches_empty) {
     // only update the scheduling latency when there are requests to process
     COUNTER_ADD(scheduling_latency_seconds, timer.elapsed_seconds());
 
