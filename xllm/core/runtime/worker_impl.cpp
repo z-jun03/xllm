@@ -378,6 +378,10 @@ ForwardInput WorkerImpl::prepare_inputs(Batch& batch) {
   return model_executor_->prepare_inputs(batch);
 }
 
+DiTForwardInput WorkerImpl::prepare_inputs(DiTBatch& batch) {
+  return dit_model_executor_->prepare_inputs(batch);
+}
+
 folly::SemiFuture<std::tuple<int64_t, int64_t>>
 WorkerImpl::estimate_kv_cache_capacity_async() {
   folly::Promise<std::tuple<int64_t, int64_t>> promise;
@@ -551,6 +555,28 @@ folly::SemiFuture<std::optional<ForwardOutput>> WorkerImpl::step_async(
     }
   });
   return future;
+}
+
+folly::SemiFuture<std::optional<DiTForwardOutput>> WorkerImpl::step_async(
+    const DiTForwardInput& inputs) {
+  folly::Promise<std::optional<DiTForwardOutput>> promise;
+  auto future = promise.getSemiFuture();
+  threadpool_.schedule([this,
+                        inputs = std::move(inputs),
+                        promise = std::move(promise)]() mutable {
+    auto output = this->step(inputs);
+    promise.setValue(output);
+  });
+  return future;
+  // auto sp =
+  // std::make_shared<folly::Promise<std::optional<DiTForwardOutput>>>(); auto
+  // fut = sp->getSemiFuture(); threadpool_.schedule([this, inputs, sp]()
+  // mutable {
+  //   auto output = this->step(inputs);
+  //   sp->setValue(output);
+  // });
+  // LOG(INFO) << "worker step end";
+  // return fut;
 }
 
 ForwardOutput WorkerImpl::get_last_step_result() {

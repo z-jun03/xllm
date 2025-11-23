@@ -22,6 +22,8 @@ limitations under the License.
 #include <memory>
 
 #include "common/types.h"
+#include "dit_executor.h"
+#include "dit_forward_params.h"
 #include "executor.h"
 #include "forward_params.h"
 #include "framework/model_context.h"
@@ -29,6 +31,7 @@ limitations under the License.
 #include "framework/kv_cache/hccl_kv_cache_transfer.h"
 #include "framework/kv_cache/llm_data_dist_transfer.h"
 #endif
+#include "framework/batch/dit_batch.h"
 #include "framework/eplb/eplb_executor.h"
 #include "framework/kv_cache/kv_cache_store.h"
 #include "framework/model/causal_lm.h"
@@ -63,7 +66,7 @@ class WorkerImpl {
   virtual ~WorkerImpl();
 
   // initialize model, cache manager. blocking call
-  virtual bool init_model(ModelContext& context) = 0;
+  virtual bool init_model(ModelContext& context) {};
 
   virtual bool init_model(const std::string& model_weights_path);
 
@@ -111,13 +114,19 @@ class WorkerImpl {
   // prepare input for execution
   virtual ForwardInput prepare_inputs(Batch& batch);
 
+  // prepare input for dit execution
+  virtual DiTForwardInput prepare_inputs(DiTBatch& batch);
+
   // prepare work before model execution
   virtual void prepare_work_before_execute(
       const BatchedForwardInputs& inputs,
       BatchedForwardInputs& processed_inputs);
 
   virtual std::optional<ForwardOutput> step(
-      const BatchedForwardInputs& inputs) = 0;
+      const BatchedForwardInputs& inputs) {};
+
+  virtual std::optional<DiTForwardOutput> step(const DiTForwardInput& inputs) {
+  };
 
   virtual void process_group_test();
 
@@ -160,6 +169,9 @@ class WorkerImpl {
   // the future returns a successfull status with no meaningful value
   virtual folly::SemiFuture<std::optional<ForwardOutput>> step_async(
       const BatchedForwardInputs& inputs);
+
+  virtual folly::SemiFuture<std::optional<DiTForwardOutput>> step_async(
+      const DiTForwardInput& inputs);
 
   virtual folly::SemiFuture<folly::Unit> process_group_test_async();
 
@@ -240,11 +252,15 @@ class WorkerImpl {
   // causal LM model
   std::unique_ptr<CausalLM> model_;
 
+  std::unique_ptr<DiTModel> dit_model_;
+
   std::unique_ptr<Executor> model_executor_;
 
   std::unique_ptr<Sampler> sampler_;
 
   std::unique_ptr<EplbExecutor> eplb_executor_;
+
+  std::unique_ptr<DiTExecutor> dit_model_executor_;
 
   // params for enable_schedule_overlap case
   // an output to store the result of last step

@@ -31,6 +31,7 @@ limitations under the License.
 #include "core/common/global_flags.h"
 #include "core/framework/dit_model_loader.h"
 #include "framework/dit_cache/dit_cache.h"
+#include "framework/model/model_input_params.h"
 #include "framework/state_dict/state_dict.h"
 #include "models/model_registry.h"
 #include "util/threadpool.h"
@@ -38,14 +39,22 @@ limitations under the License.
 #include "util/utils.h"
 
 namespace xllm {
-DiTWorker::DiTWorker(const ParallelArgs& parallel_args,
-                     const torch::Device& device,
-                     const runtime::Options& options)
-    : device_(device), options_(options), parallel_args_(parallel_args) {
+// DiTWorkerImpl::DiTWorkerImpl(const ParallelArgs& parallel_args,
+//                      const torch::Device& device,
+//                      const runtime::Options& options)
+//     // : device_(device), options_(options), parallel_args_(parallel_args) {
+//     : WorkerImpl(parallel_args, device, options) {
+//   device_.set_device();
+// }
+
+DiTWorkerImpl::DiTWorkerImpl(const ParallelArgs& parallel_args,
+                             const torch::Device& device,
+                             const runtime::Options& options)
+    : WorkerImpl(parallel_args, device, options) {
   device_.set_device();
 }
 
-bool DiTWorker::init_model(const std::string& model_weights_path) {
+bool DiTWorkerImpl::init_model(const std::string& model_weights_path) {
   CHECK(dit_model_ == nullptr) << "Model is already initialized.";
 
   auto loader = std::make_unique<DiTModelLoader>(model_weights_path);
@@ -80,7 +89,8 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   return true;
 }
 
-std::optional<DiTForwardOutput> DiTWorker::step(const DiTForwardInput& inputs) {
+std::optional<DiTForwardOutput> DiTWorkerImpl::step(
+    const DiTForwardInput& inputs) {
   Timer timer;
 
   auto output = dit_model_executor_->forward(inputs.to(device_, dtype_));
@@ -91,25 +101,25 @@ std::optional<DiTForwardOutput> DiTWorker::step(const DiTForwardInput& inputs) {
   return output;
 }
 
-folly::SemiFuture<folly::Unit> DiTWorker::process_group_test_async() {
-  folly::Promise<folly::Unit> promise;
-  auto future = promise.getSemiFuture();
-  threadpool_.schedule([this, promise = std::move(promise)]() mutable {
-    this->process_group_test_async();
-    promise.setValue();
-  });
-  return future;
-}
+// folly::SemiFuture<folly::Unit> DiTWorkerImpl::process_group_test_async() {
+//   folly::Promise<folly::Unit> promise;
+//   auto future = promise.getSemiFuture();
+//   threadpool_.schedule([this, promise = std::move(promise)]() mutable {
+//     this->process_group_test_async();
+//     promise.setValue();
+//   });
+//   return future;
+// }
 
 // prepare input for execution
-DiTForwardInput DiTWorker::prepare_inputs(DiTBatch& batch) {
-  return dit_model_executor_->prepare_inputs(batch);
-}
+// DiTForwardInput DiTWorkerImpl::prepare_inputs(DiTBatch& batch) {
+//   return dit_model_executor_->prepare_inputs(batch);
+// }
 
-int64_t DiTWorker::get_active_activation_memory() {
-  return DeviceMonitor::get_instance()
-      .get_device_stats(device_.index())
-      .active_activation_memory;
-}
+// int64_t DiTWorkerImpl::get_active_activation_memory() {
+//   return DeviceMonitor::get_instance()
+//       .get_device_stats(device_.index())
+//       .active_activation_memory;
+// }
 
 }  // namespace xllm

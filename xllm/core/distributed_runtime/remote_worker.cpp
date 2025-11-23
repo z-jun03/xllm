@@ -178,6 +178,12 @@ folly::SemiFuture<std::optional<RawForwardOutput>> RemoteWorker::step_async(
   return future;
 }
 
+folly::SemiFuture<std::optional<DiTForwardOutput>> RemoteWorker::step_async(
+    const DiTForwardInput& inputs) {
+  LOG(ERROR) << "RemoteWorker Method step_async with "
+                "ForwardInput param is UnImplemented.";
+}
+
 folly::SemiFuture<folly::Unit> RemoteWorker::process_group_test_async() {
   folly::Promise<folly::Unit> promise;
   auto future = promise.getSemiFuture();

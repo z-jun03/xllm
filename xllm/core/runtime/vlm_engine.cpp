@@ -323,7 +323,8 @@ ForwardOutput VLMEngine::step(std::vector<Batch>& batch) {
       << "Split DP batch failed with dp_size as " << dp_size_
       << " and actual batch size as " << batch.size() << ".";
 
-  auto batched_raw_forward_inputs = prepare_inputs(batch);
+  std::vector<std::vector<RawForwardInput>> batched_raw_forward_inputs =
+      prepare_inputs(batch);
 
   DCHECK(dp_size_ == batched_raw_forward_inputs.size())
       << "The processed raw forward inputs size "

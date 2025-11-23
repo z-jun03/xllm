@@ -21,51 +21,45 @@ limitations under the License.
 #include <thread>
 
 #include "dit_executor.h"
+#include "dit_forward_params.h"
+#include "executor.h"
+#include "forward_params.h"
+#include "framework/batch/dit_batch.h"
 #include "framework/dit_model_context.h"
+#include "framework/model/model_args.h"
+#include "framework/model/model_input_params.h"
 #include "framework/parallel_state/parallel_args.h"
+#include "framework/quant_args.h"
 #include "options.h"
 #include "platform/device.h"
-#include "util/threadpool.h"
+#include "worker_impl.h"
 
 namespace xllm {
 
-class DiTWorker {
+class DiTWorkerImpl : public WorkerImpl {
  public:
-  DiTWorker(const ParallelArgs& parallel_args,
-            const torch::Device& device,
-            const runtime::Options& options);
+  DiTWorkerImpl(const ParallelArgs& parallel_args,
+                const torch::Device& device,
+                const runtime::Options& options);
 
-  ~DiTWorker() = default;
+  ~DiTWorkerImpl() override = default;
 
   // initialize model, cache manager. blocking call
-  bool init_model(const std::string& model_weights_path);
+  bool init_model(const std::string& model_weights_path) override;
 
-  std::optional<DiTForwardOutput> step(const DiTForwardInput& inputs);
+  std::optional<DiTForwardOutput> step(const DiTForwardInput& inputs) override;
 
-  folly::SemiFuture<folly::Unit> process_group_test_async();
+  // folly::SemiFuture<folly::Unit> process_group_test_async() overrides;
+  // folly::SemiFuture<folly::Unit> process_group_test_async();
 
   // prepare input for execution
-  DiTForwardInput prepare_inputs(DiTBatch& batch);
+  // DiTForwardInput prepare_inputs(DiTBatch& batch) override;
 
-  int64_t get_active_activation_memory();
+  // int64_t get_active_activation_memory();
 
  private:
-  runtime::Options options_;
-
-  std::unique_ptr<DiTModel> dit_model_;
-
-  std::unique_ptr<DiTExecutor> dit_model_executor_;
-
-  Device device_;
-
-  torch::ScalarType dtype_;
-
   // model context, includes model args, parallel args and date type etc.
   mutable DiTModelContext context_;
-
-  ParallelArgs parallel_args_;
-
-  ThreadPool threadpool_;
 };
 
 }  // namespace xllm

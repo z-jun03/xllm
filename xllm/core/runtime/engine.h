@@ -18,6 +18,7 @@ limitations under the License.
 #include <folly/futures/Future.h>
 
 #include "framework/batch/batch.h"
+#include "framework/batch/dit_batch.h"
 #include "framework/block/block_manager_pool.h"
 #include "framework/model/model_args.h"
 #include "framework/tokenizer/tokenizer.h"
@@ -34,6 +35,8 @@ class Engine {
 
   // execute model with batch input
   virtual ForwardOutput step(std::vector<Batch>& batch) = 0;
+
+  // virtual DiTForwardOutput step(std::vector<DiTBatch>& batch) = 0;
 
   virtual void update_last_step_result(std::vector<Batch>& batch) = 0;
 

@@ -120,6 +120,9 @@ class Worker {
   folly::SemiFuture<std::optional<ForwardOutput>> step_async(
       const BatchedForwardInputs& inputs);
 
+  folly::SemiFuture<std::optional<DiTForwardOutput>> step_async(
+      const DiTForwardInput& inputs);
+
   folly::SemiFuture<folly::Unit> process_group_test_async();
 
   const torch::Device& device() const;

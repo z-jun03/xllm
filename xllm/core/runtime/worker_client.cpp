@@ -117,6 +117,11 @@ folly::SemiFuture<std::optional<RawForwardOutput>> WorkerClient::step_async(
                 "UnImplemented.";
 }
 
+folly::SemiFuture<std::optional<DiTForwardOutput>> WorkerClient::step_async(
+    const DiTForwardInput& inputs) {
+  return worker_->step_async(inputs);
+}
+
 folly::SemiFuture<folly::Unit> WorkerClient::process_group_test_async() {
   return worker_->process_group_test_async();
 }
