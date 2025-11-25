@@ -177,6 +177,20 @@ bool DiTFolderLoader::load_tokenizer_args(
   if (!std::filesystem::exists(tokenizer_args_file_path)) {
     return true;
   }
+
+  // check if tokenizer.json or vocab.json exists, if exists, set the tokenizer
+  // type to fast
+  const std::string tokenizer_json_path =
+      model_weights_path + "/tokenizer.json";
+  const std::string vocab_json_path = model_weights_path + "/vocab.json";
+  if (std::filesystem::exists(tokenizer_json_path)) {
+    tokenizer_args_.tokenizer_type() = "fast";
+    tokenizer_args_.vocab_file() = tokenizer_json_path;
+  } else if (std::filesystem::exists(vocab_json_path)) {
+    tokenizer_args_.tokenizer_type() = "fast";
+    tokenizer_args_.vocab_file() = vocab_json_path;
+  }
+
   if (tokenizer_reader.parse(tokenizer_args_file_path)) {
     if (auto v = tokenizer_reader.value<bool>("add_bos_token")) {
       tokenizer_args_.add_bos_token() = v.value();
