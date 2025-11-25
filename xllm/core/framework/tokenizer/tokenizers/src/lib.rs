@@ -73,7 +73,8 @@ extern "C" fn tokenizers_new_from_path(path: *const c_char) -> *mut TokenizerWra
         Ok(bytes) => {
             return tokenizers_new_from_str(bytes.as_ptr(), bytes.len());
         }
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Failed to read tokenizer file {}: {:?}", path_str, e);
             panic!("Failed to read tokenizer file.");
         }
     }

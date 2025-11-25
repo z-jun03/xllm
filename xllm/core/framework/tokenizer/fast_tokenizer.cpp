@@ -22,6 +22,7 @@ namespace xllm {
 
 FastTokenizer::FastTokenizer(const TokenizerArgs& tokenizer_args)
     : tokenizer_args_(tokenizer_args) {
+  LOG(INFO) << "vocab_file path: " << tokenizer_args.vocab_file();
   handle_ = tokenizers_new_from_path(tokenizer_args.vocab_file().c_str());
   CHECK(handle_ != nullptr)
       << "Failed to load tokenizer from file: " << tokenizer_args.vocab_file();

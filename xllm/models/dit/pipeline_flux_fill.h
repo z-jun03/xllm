@@ -391,7 +391,8 @@ class FluxFillPipelineImpl : public FluxPipelineBaseImpl {
       torch::Tensor input_latents =
           torch::cat({latents.value(), masked_image_latents.value()}, 2);
 
-      torch::Tensor noise_pred =
+      torch::Tensor noise_pred;
+      std::pair<torch::Tensor, bool> output =
           transformer_->forward(input_latents,
                                 prompt_embeds.value(),
                                 pooled_prompt_embeds.value(),
@@ -399,7 +400,11 @@ class FluxFillPipelineImpl : public FluxPipelineBaseImpl {
                                 image_rotary_emb,
                                 guidance,
                                 step_id);
+      noise_pred = output.first;
       auto prev_latents = scheduler_->step(noise_pred, t, latents.value());
+      if (step_id == 1) {
+        LOG(INFO) << "image latents shape: " << prev_latents.sizes();
+      }
       latents = prev_latents.detach().to(options_.device());
     }
 

@@ -72,7 +72,7 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   cache_config_.taylorseer.n_derivatives = 3;
   cache_config_.taylorseer.skip_interval_steps = 3;
   cache_config_.taylorseer.num_inference_steps = 25;
-  cache_config_.taylorseer.warmup_steps = 0;
+  cache_config_.taylorseer.warmup_steps = 2;
 
   bool success = DiTCache::get_instance().init(cache_config_);
   CHECK(success) << "DiTCache init failed";

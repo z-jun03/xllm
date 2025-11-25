@@ -309,13 +309,16 @@ class FluxControlPipelineImpl : public FluxPipelineBaseImpl {
       int64_t step_id = i + 1;
       auto controlled_latents =
           torch::cat({prepared_latents, control_image}, 2);
-      torch::Tensor noise_pred = transformer_->forward(controlled_latents,
-                                                       encoded_prompt_embeds,
-                                                       encoded_pooled_embeds,
-                                                       timestep,
-                                                       image_rotary_emb,
-                                                       guidance,
-                                                       step_id);
+      torch::Tensor noise_pred;
+      std::pair<torch::Tensor, bool> output =
+          transformer_->forward(controlled_latents,
+                                encoded_prompt_embeds,
+                                encoded_pooled_embeds,
+                                timestep,
+                                image_rotary_emb,
+                                guidance,
+                                step_id);
+      noise_pred = output.first;
       auto prev_latents = scheduler_->step(noise_pred, t, prepared_latents);
       prepared_latents = prev_latents.detach();
       std::vector<torch::Tensor> tensors = {prepared_latents, noise_pred};

@@ -23,6 +23,8 @@ limitations under the License.
 
 #include <boost/algorithm/string.hpp>
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <vector>
 
 #include "core/framework/tokenizer/tokenizer_factory.h"
@@ -30,6 +32,22 @@ limitations under the License.
 #include "models/model_registry.h"
 
 namespace xllm {
+
+namespace {
+bool is_valid_json(const std::string& path) {
+  std::ifstream ifs(path);
+  if (!ifs.is_open()) return false;
+  try {
+    nlohmann::json j;
+    ifs >> j;  // 解析会抛异常
+    return true;
+  } catch (std::exception& e) {
+    LOG(WARNING) << "Invalid JSON in " << path << ": " << e.what();
+    return false;
+  }
+}
+}  // namespace
+
 DiTFolderLoader::DiTFolderLoader(const std::string& folder_path,
                                  const std::string& component_name,
                                  const std::string& model_type)
@@ -183,12 +201,26 @@ bool DiTFolderLoader::load_tokenizer_args(
   const std::string tokenizer_json_path =
       model_weights_path + "/tokenizer.json";
   const std::string vocab_json_path = model_weights_path + "/vocab.json";
+  if (std::filesystem::exists(tokenizer_json_path) &&
+      is_valid_json(tokenizer_json_path)) {
+    LOG(INFO) << "Create fast tokenizer.";
+    // create fast
+  } else if (std::filesystem::exists(vocab_json_path) &&
+             is_valid_json(vocab_json_path)) {
+    LOG(INFO) << "tokenizer.json invalid or missing, fallback to vocab.json "
+                 "(slow tokenizer).";
+    // create slow tokenizer from vocab
+  } else {
+    LOG(ERROR) << "No tokenizer files found.";
+  }
+
   if (std::filesystem::exists(tokenizer_json_path)) {
     tokenizer_args_.tokenizer_type() = "fast";
     tokenizer_args_.vocab_file() = tokenizer_json_path;
   } else if (std::filesystem::exists(vocab_json_path)) {
     tokenizer_args_.tokenizer_type() = "fast";
-    tokenizer_args_.vocab_file() = vocab_json_path;
+    tokenizer_args_.vocab_file() =
+        vocab_json_path;  //"vocab.json"; //vocab_json_path;
   }
 
   if (tokenizer_reader.parse(tokenizer_args_file_path)) {

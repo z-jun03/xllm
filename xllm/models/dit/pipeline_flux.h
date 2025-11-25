@@ -274,33 +274,59 @@ class FluxPipelineImpl : public FluxPipelineBaseImpl {
                                   width / (vae_scale_factor_ * 2));
     torch::Tensor image_rotary_emb = torch::stack({rot_emb1, rot_emb2}, 0);
     for (int64_t i = 0; i < timesteps.numel(); ++i) {
+      bool use_cache = false;
       torch::Tensor t = timesteps[i].unsqueeze(0);
       timestep.fill_(t.item<float>())
           .to(prepared_latents.dtype())
           .div_(1000.0f);
       int64_t step_id = i + 1;
-      torch::Tensor noise_pred = transformer_->forward(prepared_latents,
-                                                       encoded_prompt_embeds,
-                                                       encoded_pooled_embeds,
-                                                       timestep,
-                                                       image_rotary_emb,
-                                                       guidance,
-                                                       step_id);
+      torch::Tensor noise_pred;
+      // torch::Tensor noise_pred
+      std::pair<torch::Tensor, bool> output;
+      output = transformer_->forward(prepared_latents,
+                                     encoded_prompt_embeds,
+                                     encoded_pooled_embeds,
+                                     timestep,
+                                     image_rotary_emb,
+                                     guidance,
+                                     step_id);
+      noise_pred = output.first;
+      use_cache = output.second;
+
       if (do_true_cfg) {
-        torch::Tensor negative_noise_pred =
-            transformer_->forward(prepared_latents,
-                                  negative_encoded_embeds,
-                                  negative_pooled_embeds,
-                                  timestep,
-                                  image_rotary_emb,
-                                  guidance,
-                                  step_id);
-        noise_pred =
+        torch::Tensor negative_noise_pred;  //=
+
+        output = transformer_->forward(prepared_latents,
+                                       negative_encoded_embeds,
+                                       negative_pooled_embeds,
+                                       timestep,
+                                       image_rotary_emb,
+                                       guidance,
+                                       step_id);
+        negative_noise_pred = output.first;
+        negative_noise_pred =
             noise_pred + (noise_pred - negative_noise_pred) * true_cfg_scale;
         negative_noise_pred.reset();
       }
-      auto prev_latents = scheduler_->step(noise_pred, t, prepared_latents);
-      prepared_latents = prev_latents.detach();
+
+      torch::Tensor prev_latents;
+      if (!use_cache) {
+        prev_latents = scheduler_->step(noise_pred, t, prepared_latents);
+        prepared_latents = prev_latents.detach();
+      }
+      // LOG(INFO) << "noise size: " << noise_pred.sizes() << "prepared_latents
+      // size: " << prepared_latents.sizes();
+      else {
+        prepared_latents = noise_pred.detach();
+      }
+
+      TensorMap step_after_map = {{"hidden_states", prepared_latents},
+                                  {"original_hidden_states", prepared_latents}};
+      CacheStepIn stepin_after(step_id, step_after_map);
+      CacheStepOut stepout_after =
+          DiTCache::get_instance().on_after_step(stepin_after);
+      prepared_latents = stepout_after.tensors.at("hidden_states");
+
       std::vector<torch::Tensor> tensors = {prepared_latents, noise_pred};
       noise_pred.reset();
       prev_latents = torch::Tensor();

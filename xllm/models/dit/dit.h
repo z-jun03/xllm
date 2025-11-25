@@ -1260,38 +1260,53 @@ class FluxTransformer2DModelImpl : public torch::nn::Module {
     proj_out_->to(options_);
   }
 
-  torch::Tensor forward(const torch::Tensor& hidden_states_input,
-                        const torch::Tensor& encoder_hidden_states_input,
-                        const torch::Tensor& pooled_projections,
-                        const torch::Tensor& timestep,
-                        const torch::Tensor& image_rotary_emb,
-                        const torch::Tensor& guidance,
-                        int64_t step_idx = 0) {
-    torch::Tensor hidden_states = x_embedder_->forward(hidden_states_input);
-    auto timestep_scaled = timestep.to(hidden_states.dtype()) * 1000.0f;
-    torch::Tensor temb;
-    if (guidance.defined()) {
-      auto guidance_scaled = guidance.to(hidden_states.dtype()) * 1000.0f;
-      temb = time_text_guidance_embed_->forward(
-          timestep_scaled, guidance_scaled, pooled_projections);
-    } else {
-      temb = time_text_embed_->forward(timestep_scaled, pooled_projections);
-    }
-    torch::Tensor encoder_hidden_states =
-        context_embedder_->forward(encoder_hidden_states_input);
-
+  std::pair<torch::Tensor, bool> forward(
+      const torch::Tensor& hidden_states_input,
+      const torch::Tensor& encoder_hidden_states_input,
+      const torch::Tensor& pooled_projections,
+      const torch::Tensor& timestep,
+      const torch::Tensor& image_rotary_emb,
+      const torch::Tensor& guidance,
+      int64_t step_idx = 0) {
+    // Step start: prepare inputs (hidden_states, original_hidden_states)
     bool use_step_cache = false;
     bool use_block_cache = false;
+    TensorMap step_in_map = {
+        {"hidden_states", hidden_states_input},
+        {"original_hidden_states", encoder_hidden_states_input}};
+    CacheStepIn stepin_before(step_idx, step_in_map);
+    use_step_cache = DiTCache::get_instance().on_before_step(stepin_before);
+
+    torch::Tensor hidden_states = hidden_states_input;
+    torch::Tensor encoder_hidden_states = encoder_hidden_states_input;
+    torch::Tensor temb = torch::Tensor();
+    if (!use_step_cache) {
+      // torch::Tensor
+      hidden_states = x_embedder_->forward(hidden_states_input);
+      auto timestep_scaled = timestep.to(hidden_states.dtype()) * 1000.0f;
+      // torch::Tensor temb;
+      if (guidance.defined()) {
+        auto guidance_scaled = guidance.to(hidden_states.dtype()) * 1000.0f;
+        temb = time_text_guidance_embed_->forward(
+            timestep_scaled, guidance_scaled, pooled_projections);
+      } else {
+        temb = time_text_embed_->forward(timestep_scaled, pooled_projections);
+      }
+      encoder_hidden_states =
+          context_embedder_->forward(encoder_hidden_states_input);
+    }
+    // bool use_step_cache = false;
+    // bool use_block_cache = false;
 
     torch::Tensor original_hidden_states = hidden_states;
     torch::Tensor original_encoder_hidden_states = encoder_hidden_states;
 
-    // Step start: prepare inputs (hidden_states, original_hidden_states)
-    TensorMap step_in_map = {
-        {"hidden_states", hidden_states},
-        {"original_hidden_states", original_hidden_states}};
-    CacheStepIn stepin_before(step_idx, step_in_map);
-    use_step_cache = DiTCache::get_instance().on_before_step(stepin_before);
+    // // Step start: prepare inputs (hidden_states, original_hidden_states)
+    // TensorMap step_in_map = {
+    //     {"hidden_states", hidden_states},
+    //     {"original_hidden_states", original_hidden_states}};
+    // CacheStepIn stepin_before(step_idx, step_in_map);
+    // use_step_cache = DiTCache::get_instance().on_before_step(stepin_before);
 
     if (!use_step_cache) {
       for (int64_t i = 0; i < transformer_block_layers_.size(); ++i) {
@@ -1358,16 +1373,23 @@ class FluxTransformer2DModelImpl : public torch::nn::Module {
     }
 
     // Step end: update outputs (hidden_states, original_hidden_states)
-    TensorMap step_after_map = {
-        {"hidden_states", hidden_states},
-        {"original_hidden_states", original_hidden_states}};
-    CacheStepIn stepin_after(step_idx, step_after_map);
-    CacheStepOut stepout_after =
-        DiTCache::get_instance().on_after_step(stepin_after);
-    hidden_states = stepout_after.tensors.at("hidden_states");
+    // TensorMap step_after_map = {
+    //     {"hidden_states", hidden_states},
+    //     {"original_hidden_states", original_hidden_states}};
+    // CacheStepIn stepin_after(step_idx, step_after_map);
+    // CacheStepOut stepout_after =
+    //     DiTCache::get_instance().on_after_step(stepin_after);
+    // hidden_states = stepout_after.tensors.at("hidden_states");
 
-    auto output_hidden = norm_out_(hidden_states, temb);
-    return proj_out_(output_hidden);
+    torch::Tensor output_hidden;
+    if (!use_step_cache) {
+      output_hidden = norm_out_(hidden_states, temb);
+      output_hidden = proj_out_(output_hidden);
+    } else {
+      output_hidden = hidden_states;
+    }
+    return {output_hidden, use_step_cache};
+    // return {proj_out_(output_hidden),use_step_cache};
   }
 
   void load_model(std::unique_ptr<DiTFolderLoader> loader) {
@@ -1465,14 +1487,17 @@ class FluxDiTModelImpl : public torch::nn::Module {
         "flux_transformer_2d_model", FluxTransformer2DModel(context));
   }
 
-  torch::Tensor forward(const torch::Tensor& hidden_states_input,
-                        const torch::Tensor& encoder_hidden_states_input,
-                        const torch::Tensor& pooled_projections,
-                        const torch::Tensor& timestep,
-                        const torch::Tensor& image_rotary_emb,
-                        const torch::Tensor& guidance,
-                        int64_t step_idx = 0) {
-    torch::Tensor output =
+  std::pair<torch::Tensor, bool> forward(
+      const torch::Tensor& hidden_states_input,
+      const torch::Tensor& encoder_hidden_states_input,
+      const torch::Tensor& pooled_projections,
+      const torch::Tensor& timestep,
+      const torch::Tensor& image_rotary_emb,
+      const torch::Tensor& guidance,
+      int64_t step_idx = 0) {
+    // bool use_cache = false;
+    // torch::Tensor output ;
+    std::pair<torch::Tensor, bool> output =
         flux_transformer_2d_model_->forward(hidden_states_input,
                                             encoder_hidden_states_input,
                                             pooled_projections,
