@@ -289,4 +289,7 @@ struct EplbInfo {
   int32_t update_layer_id = -1;
 };
 
+inline constexpr int REC_TOKEN_SIZE = 3;
+
+using RecTokenTriple = std::array<int32_t, REC_TOKEN_SIZE>;
 }  // namespace xllm
