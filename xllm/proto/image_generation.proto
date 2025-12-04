@@ -74,6 +74,12 @@ message Parameters {
   // The extent to which the reference image is altered, between 0 and 1
   optional float strength = 8;
 
+  // prompt_embeds_scale
+  optional float prompt_embeds_scale = 9;
+
+  // pooled_prompt_embeds_scale
+  optional float pooled_prompt_embeds_scale = 10;
+
   // Array of sigma values for noise scheduling
   // repeated float sigmas = 9;
 

@@ -106,6 +106,12 @@ struct DiTForwardInput {
 struct DiTForwardOutput {
   // generated tensor
   std::vector<torch::Tensor> tensors;
+
+  // prompt_embeds
+  torch::Tensor prompt_embeds;
+
+  // pooled_prompt_embeds
+  torch::Tensor pooled_prompt_embeds;
 };
 
 }  // namespace xllm
