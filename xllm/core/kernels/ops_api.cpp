@@ -17,6 +17,8 @@ limitations under the License.
 
 #if defined(USE_MLU)
 #include "mlu/mlu_ops_api.h"
+#elif defined(USE_NPU)
+#include "npu/npu_ops_api.h"
 #elif defined(USE_CUDA)
 #include "cuda/cuda_ops_api.h"
 #elif defined(USE_ILU)
@@ -40,6 +42,9 @@ void apply_rotary(RotaryParams& params) {
                     params.discrete,
                     params.dynamic_ntk,
                     params.max_query_len);
+#elif defined(USE_NPU)
+  npu::apply_rotary(
+      params.q, params.k, params.cos_sin, params.position_ids.value());
 #elif defined(USE_CUDA)
   bool is_neox = !params.interleaved;
 
@@ -72,6 +77,8 @@ void active(ActivationParams& params) {
               params.is_gated,
               params.start_expert_id,
               params.expert_size);
+#elif defined(USE_NPU)
+  params.output = npu::active(params.input, params.act_mode);
 #elif defined(USE_CUDA)
   cuda::act_and_mul(params.output, params.input, params.act_mode);
 #elif defined(USE_ILU)
@@ -89,6 +96,12 @@ void reshape_paged_cache(ReshapePagedCacheParams& params) {
                            params.v_cache,
                            params.slot_mapping,
                            params.direction);
+#elif defined(USE_NPU)
+  npu::reshape_paged_cache(params.key,
+                           params.value,
+                           params.k_cache,
+                           params.v_cache,
+                           params.slot_mapping);
 #elif defined(USE_CUDA)
   cuda::reshape_paged_cache(params.slot_mapping,
                             params.key,
@@ -131,6 +144,14 @@ void batch_prefill(AttentionParams& params) {
                      params.window_size_right,
                      params.compute_dtype,
                      params.return_lse);
+#elif defined(USE_NPU)
+  npu::batch_prefill(params.query,
+                     params.key,
+                     params.value,
+                     params.attn_mask,
+                     params.seq_lens,
+                     params.scale,
+                     params.output);
 #elif defined(USE_CUDA)
   cuda::batch_prefill(params.float_workspace_buffer,
                       params.int_workspace_buffer,
@@ -193,6 +214,14 @@ void batch_decode(AttentionParams& params) {
                     params.scale,
                     params.return_lse,
                     params.kv_cache_quant_bit_size);
+#elif defined(USE_NPU)
+  npu::batch_decode(params.query,
+                    params.k_cache,
+                    params.v_cache.value_or(torch::Tensor()),
+                    params.scale,
+                    params.block_table.value(),
+                    params.seq_lens,
+                    params.output);
 #elif defined(USE_CUDA)
   params.query = params.query.squeeze(1);
   params.output = params.output.squeeze(1);
@@ -254,6 +283,15 @@ void fused_layernorm(FusedLayerNormParams& params) {
                        params.store_output_before_norm,
                        params.store_output_after_norm,
                        params.dynamic_quant);
+#elif defined(USE_NPU)
+  if (params.residual.has_value()) {
+    std::tie(params.output, std::ignore, params.residual_out) =
+        npu::add_rms_norm(
+            params.input, params.residual.value(), params.weight, params.eps);
+  } else {
+    params.output =
+        npu::rms_norm(params.input, params.weight, params.eps, params.mode);
+  }
 #elif defined(USE_CUDA)
   if (params.residual.has_value()) {
     cuda::fused_add_rms_norm(
@@ -281,6 +319,8 @@ torch::Tensor matmul(MatmulParams& params) {
 #if defined(USE_MLU)
   return mlu::matmul(
       params.a, params.b, params.bias, params.c, params.alpha, params.beta);
+#elif defined(USE_NPU)
+  return npu::matmul(params.a, params.b, params.bias);
 #elif defined(USE_CUDA)
   return cuda::matmul(params.a, params.b, params.bias);
 #elif defined(USE_ILU)
