@@ -41,7 +41,7 @@ DEFINE_int32(max_reconnect_count,
              40,
              "The max count for worker try to connect to server.");
 
-DEFINE_int32(num_threads, 32, "Number of threads to process requests.");
+DEFINE_int32(num_threads, 8, "Number of threads to process requests.");
 
 DEFINE_int32(
     max_concurrent_requests,
