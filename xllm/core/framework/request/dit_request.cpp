@@ -46,9 +46,16 @@ void DiTRequest::log_statistic(double total_latency) {
             << "total_latency: " << total_latency * 1000 << "ms";
 }
 
-void DiTRequest::handle_forward_output(torch::Tensor output) {
+void DiTRequest::handle_forward_output(
+    torch::Tensor output,
+    std::optional<torch::Tensor>
+        embeds) {  // , std::vector<torch::Tensor>& tensors) {
   int count = state_.generation_params().num_images_per_prompt;
-  output_.tensors = torch::chunk(output, count);
+  if (embeds.has_value()) {
+    output_.prompt_embeds = torch::chunk(output, count);
+    output_.pooled_prompt_embeds = torch::chunk(embeds.value(), count);
+  } else
+    output_.tensors = torch::chunk(output, count);
 }
 
 const DiTRequestOutput DiTRequest::generate_output() {
@@ -66,11 +73,32 @@ const DiTRequestOutput DiTRequest::generate_output() {
 
   OpenCVImageEncoder encoder;
   int count = state_.generation_params().num_images_per_prompt;
-  for (size_t idx = 0; idx < count; ++idx) {
-    torch::Tensor image =
-        output_.tensors[idx].squeeze(0).cpu().to(torch::kFloat32).contiguous();
-    encoder.encode(image, result.image);
-    output.outputs.push_back(result);
+  if (!output_.tensors.empty()) {
+    for (size_t idx = 0; idx < count; ++idx) {
+      torch::Tensor image = output_.tensors[idx]
+                                .squeeze(0)
+                                .cpu()
+                                .to(torch::kFloat32)
+                                .contiguous();
+      encoder.encode(image, result.image);
+      output.outputs.push_back(result);
+    }
+  }
+
+  if (!output_.prompt_embeds.empty()) {
+    for (size_t idx = 0; idx < count; ++idx) {
+      result.prompt_embeds = output_.prompt_embeds[idx]
+                                 .squeeze(0)
+                                 .cpu()
+                                 .to(torch::kFloat32)
+                                 .contiguous();
+      result.pooled_prompt_embeds = output_.pooled_prompt_embeds[idx]
+                                        .squeeze(0)
+                                        .cpu()
+                                        .to(torch::kFloat32)
+                                        .contiguous();
+      output.outputs.push_back(result);
+    }
   }
 
   return output;

@@ -154,11 +154,49 @@ DiTForwardInput DiTBatch::prepare_forward_input() {
   return input;
 }
 
+// 放入空torch::Tensor
+// void DiTBatch::process_forward_output(const DiTForwardOutput& output) {
+//   CHECK(request_vec_.size() == output.tensors.size());
+//   for (int idx = 0; idx < request_vec_.size(); ++idx) {
+//     auto& request = request_vec_[idx];
+//     request->handle_forward_output(output.tensors[idx]);
+//   }
+
+//   CHECK(request_vec_.size() == output.prompt_embeds.size());
+//   for(int idex = 0; idx < request_vec_.size(); ++idx) {
+//     auto& request = request_vec_[idx];
+//     request->handle_forward_output(output.prompt_embeds[idx]);
+//   }
+
+//   CHECK(request_vec_.size()== output.pooled_prompt_embeds.size());
+//   for(int idx = 0; idx < request_vec_.size(); ++idx) {
+//     auto& request = request_vec_[idx];
+//     request->handle_forward_output(output.pooled_prompt_embeds[idx]);
+//   }
+
 void DiTBatch::process_forward_output(const DiTForwardOutput& output) {
-  CHECK(request_vec_.size() == output.tensors.size());
-  for (int idx = 0; idx < request_vec_.size(); ++idx) {
-    auto& request = request_vec_[idx];
-    request->handle_forward_output(output.tensors[idx]);
+  switch (output.type) {
+    case DiTForwardOutputType::kGenerated: {
+      CHECK_EQ(request_vec_.size(), output.tensors.size());
+      for (size_t i = 0; i < request_vec_.size(); ++i) {
+        request_vec_[i]->handle_forward_output(output.tensors[i]);
+      }
+      break;
+    }
+
+    case DiTForwardOutputType::kPromptEmbeds: {
+      CHECK_EQ(request_vec_.size(), output.prompt_embeds.size());
+      CHECK_EQ(request_vec_.size(), output.pooled_prompt_embeds.size());
+
+      for (size_t i = 0; i < request_vec_.size(); ++i) {
+        request_vec_[i]->handle_forward_output(output.prompt_embeds[i],
+                                               output.pooled_prompt_embeds[i]);
+      }
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unknown DiTForwardOutputType";
   }
 }
 

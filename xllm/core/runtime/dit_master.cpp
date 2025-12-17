@@ -73,11 +73,13 @@ DiTMaster::~DiTMaster() {
   }
 }
 
+// process_async 调用handle_request
 void DiTMaster::handle_request(DiTRequestParams params,
                                std::optional<Call*> call,
                                DiTOutputCallback callback) {
   scheduler_->incr_pending_requests(1);
-  auto cb = [callback = std::move(callback)](const DiTRequestOutput& output) {
+  auto cb = [callback = std::move(callback)](
+                const DiTRequestOutput& output) {  // ditoutfunc
     output.log_request_status();
     return callback(output);
   };
@@ -124,7 +126,7 @@ void DiTMaster::handle_batch_request(std::vector<DiTRequestParams> params_vec,
                    });
   }
 }
-
+// 先是run
 void DiTMaster::run() {
   const bool already_running = running_.load(std::memory_order_relaxed);
   if (already_running) {

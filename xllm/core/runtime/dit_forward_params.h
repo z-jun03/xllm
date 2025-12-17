@@ -102,10 +102,25 @@ struct DiTForwardInput {
   DiTGenerationParams generation_params;
 };
 
+enum class DiTForwardOutputType {
+  kGenerated,
+  kPromptEmbeds,
+};
+
 // dit related forward output params
 struct DiTForwardOutput {
+  DiTForwardOutputType type;
+
   // generated tensor
   std::vector<torch::Tensor> tensors;
+
+  // prompt_embeds
+  // torch::Tensor prompt_embeds;
+  std::vector<torch::Tensor> prompt_embeds;
+
+  // pooled_prompt_embeds
+  // torch::Tensor pooled_prompt_embeds;
+  std::vector<torch::Tensor> pooled_prompt_embeds;
 };
 
 }  // namespace xllm

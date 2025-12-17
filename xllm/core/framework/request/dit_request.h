@@ -41,7 +41,8 @@ class DiTRequest : public RequestBase {
 
   bool finished() const;
 
-  void handle_forward_output(torch::Tensor output);
+  void handle_forward_output(torch::Tensor output,
+                             std::optional<torch::Tensor> embeds);
 
   const DiTRequestOutput generate_output();
 

@@ -122,7 +122,10 @@ DiTForwardOutput DiTEngine::step(std::vector<DiTBatch>& batches) {
   auto results = folly::collectAll(futures).get();
 
   // return the result from the driver
-  auto forward_output = results.front().value();
+
+  // 处理输出结果
+  auto forward_output =
+      results.front().value();  // 多卡并行。只取第一个卡的结果
   DCHECK(forward_output.has_value()) << "Failed to execute model";
   batches[0].process_forward_output(forward_output.value());
   return forward_output.value();

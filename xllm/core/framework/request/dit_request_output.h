@@ -42,6 +42,12 @@ struct DiTGenerationOutput {
 
   // seed used for image generation.
   int64_t seed;
+
+  // prompt_embeds for fluxredux
+  torch::Tensor prompt_embeds
+
+      // pooled_prompt_embeds for fluxredux
+      torch::Tensor pooled_prompt_embeds
 };
 
 struct DiTRequestOutput {
