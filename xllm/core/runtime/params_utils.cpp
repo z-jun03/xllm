@@ -64,6 +64,8 @@ void proto_to_forward_input(const proto::ForwardInput* pb_forward_input,
       std::vector<int32_t>(pb_forward_input->q_seq_lens().begin(),
                            pb_forward_input->q_seq_lens().end());
   // aprint<int32_t>(q_seq_lens, "q_seq_lens", global_rank_);
+  std::vector<int32_t> q_cu_seq_lens(q_seq_lens.size());
+  std::partial_sum(q_seq_lens.begin(), q_seq_lens.end(), q_cu_seq_lens.begin());
   // for flashinfer
   std::vector<int32_t> paged_kv_indptr =
       std::vector<int32_t>(pb_forward_input->paged_kv_indptr().begin(),
@@ -190,6 +192,7 @@ void proto_to_forward_input(const proto::ForwardInput* pb_forward_input,
   input_params.q_max_seq_len = pb_forward_input->q_max_seq_len();
   input_params.kv_seq_lens = torch::tensor(seq_lens, tensor_options);
   input_params.q_seq_lens = torch::tensor(q_seq_lens, tensor_options);
+  input_params.q_cu_seq_lens = torch::tensor(q_cu_seq_lens, tensor_options);
   input_params.kv_seq_lens_vec = std::move(seq_lens);
   input_params.q_seq_lens_vec = std::move(q_seq_lens);
 
@@ -384,6 +387,8 @@ void forward_input_to_proto(const RawForwardInput& inputs,
   ADD_VECTOR_TO_PROTO(pb_forward_input->mutable_seq_lens(), inputs.seq_lens);
   ADD_VECTOR_TO_PROTO(pb_forward_input->mutable_q_seq_lens(),
                       inputs.q_seq_lens);
+  ADD_VECTOR_TO_PROTO(pb_forward_input->mutable_q_cu_seq_lens(),
+                      inputs.q_cu_seq_lens);
   // for flashinfer
   ADD_VECTOR_TO_PROTO(pb_forward_input->mutable_paged_kv_indptr(),
                       inputs.paged_kv_indptr);
