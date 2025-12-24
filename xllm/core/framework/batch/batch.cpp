@@ -29,6 +29,7 @@ limitations under the License.
 #include "framework/model/model_input_params.h"
 #include "framework/request/sequence.h"
 #include "framework/sampling/sampling_params.h"
+#include "rec_batch_input_builder.h"
 #include "runtime/params_utils.h"
 #include "util/slice.h"
 #include "util/tensor_helper.h"
@@ -96,6 +97,10 @@ void Batch::add(const std::vector<Sequence*>& sequences) {
 ForwardInput Batch::prepare_forward_input(uint32_t num_decoding_tokens,
                                           uint32_t min_decoding_batch_size,
                                           const ModelArgs& args) {
+  if (sequences_.empty() && !sequence_groups_.empty()) {
+    return prepare_rec_forward_input(
+        num_decoding_tokens, min_decoding_batch_size, args);
+  }
   BatchInputBuilder builder(sequences_,
                             allowed_max_tokens_,
                             input_embeddings_vec_,
@@ -106,6 +111,43 @@ ForwardInput Batch::prepare_forward_input(uint32_t num_decoding_tokens,
                             batch_forward_type_);
   return builder.build_forward_input(num_decoding_tokens,
                                      min_decoding_batch_size);
+}
+
+ForwardInput Batch::prepare_rec_forward_input(uint32_t num_decoding_tokens,
+                                              uint32_t min_decoding_batch_size,
+                                              const ModelArgs& args,
+                                              ThreadPool* thread_pool) {
+  RecType rec_type = RecType::kNone;
+  if (!sequence_groups_.empty() && !sequence_groups_[0]->sequences().empty()) {
+    rec_type = sequence_groups_[0]->sequences()[0]->rec_type();
+  }
+
+  auto builder = RecBatchInputBuilder::create(rec_type,
+                                              sequence_groups_,
+                                              allowed_max_tokens_,
+                                              input_embeddings_vec_,
+                                              mm_data_vec_,
+                                              swap_block_transfer_infos_,
+                                              batch_id_,
+                                              &args,
+                                              thread_pool);
+  return builder->build_rec_forward_input(num_decoding_tokens,
+                                          min_decoding_batch_size);
+}
+
+std::vector<Sequence*> Batch::get_sequences() {
+  if (!sequences_.empty()) {
+    return sequences_;
+  }
+
+  std::vector<Sequence*> result;
+  for (auto* seq_group : sequence_groups_) {
+    const auto& sequences = seq_group->sequences();
+    for (const auto& seq_ptr : sequences) {
+      result.push_back(seq_ptr.get());
+    }
+  }
+  return result;
 }
 
 void Batch::dp_balance_shuffle_seqs() {
@@ -217,7 +259,8 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
   // this means all sequences are in prefill stage status.
   const int64_t num_seqs = raw_output.outputs.size();
   int64_t output_idx = 0;
-  for (auto* seq : sequences_) {
+  const auto sequences = get_sequences();
+  for (auto* seq : sequences) {
     if (seq->finished()) {
       output_idx++;
       continue;
@@ -264,7 +307,8 @@ void Batch::process_sample_output(const SampleOutput& sample_output,
   if (sample_output.embeddings.defined()) {
     const int64_t num_seqs = sample_output.embeddings.size(0);
     int64_t output_idx = 0;
-    for (auto* seq : sequences_) {
+    const auto sequences = get_sequences();
+    for (auto* seq : sequences) {
       CHECK_LT(output_idx, num_seqs);
       auto cur_seq_embed =
           safe_to(sample_output.embeddings[output_idx++], torch::kFloat32);
@@ -277,7 +321,8 @@ void Batch::process_sample_output(const SampleOutput& sample_output,
   // this means all sequences are in prefill stage status.
   const int64_t num_seqs = sample_output.next_tokens.size(0);
   int64_t output_idx = 0;
-  for (auto* seq : sequences_) {
+  const auto sequences = get_sequences();
+  for (auto* seq : sequences) {
     if (seq->finished()) {
       output_idx++;
       continue;
