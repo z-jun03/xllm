@@ -20,7 +20,14 @@ limitations under the License.
 #include <folly/futures/Future.h>
 #include <glog/logging.h>
 #include <torch/torch.h>
+#if defined(USE_NPU)
+#include <torch_npu/csrc/core/npu/NPUFormat.h>
+#include <torch_npu/csrc/core/npu/NPUFunctions.h>
+#include <torch_npu/csrc/framework/OpCommand.h>
+#include <torch_npu/torch_npu.h>
 
+#include "pytorch/adapter/utils/utils.h"
+#endif
 #include <memory>
 #include <optional>
 #include <utility>
@@ -65,6 +72,19 @@ DiTCacheConfig parse_dit_cache_from_flags() {
   }
   return cache_config;
 }
+
+// std::vector<int64_t> tensor_to_vector(const torch::Tensor& t) {
+//   CHECK(t.dim() == 1) << "tensor_to_vector expects 1-D tensor";
+//   std::vector<int64_t> out;
+//   out.reserve(t.size(0));
+//   auto cpu = t.to(torch::kCPU);
+//   int64_t n = cpu.size(0);
+//   for (int64_t i = 0; i < n; ++i) {
+//     out.push_back(cpu[i].item<int64_t>());
+//   }
+//   return out;
+// }
+
 }  // namespace
 
 DiTWorker::DiTWorker(const ParallelArgs& parallel_args,
@@ -72,11 +92,23 @@ DiTWorker::DiTWorker(const ParallelArgs& parallel_args,
                      const runtime::Options& options)
     : device_(device), options_(options), parallel_args_(parallel_args) {
   device_.set_device();
+  driver_ = parallel_args_.rank() == 0;
 }
 
 bool DiTWorker::init_model(const std::string& model_weights_path) {
   CHECK(dit_model_ == nullptr) << "Model is already initialized.";
+  int currentDevId = device_.index();
+#if defined(USE_NPU)
+  int ret = aclrtSetDevice(currentDevId);
+  if (ret != 0) {
+    LOG(ERROR) << "ACL set device id:" << currentDevId
+               << " failed, ret:" << ret;
+  }
+#elif defined(USE_MLU)
+  // TODO(mlu): implement mlu set device
+#endif
 
+  LOG(INFO) << "Loading DiT model weights from: " << model_weights_path;
   auto loader = std::make_unique<DiTModelLoader>(model_weights_path);
   dtype_ = util::parse_dtype(loader->get_torch_dtype(), device_);
 
@@ -100,22 +132,72 @@ bool DiTWorker::init_model(const std::string& model_weights_path) {
   return true;
 }
 
+folly::SemiFuture<bool> DiTWorker::init_model_async(
+    const std::string& model_weights_path) {
+  LOG(INFO) << "init model async";
+  // auto sp = std::make_shared<folly::Promise<bool>>();
+  auto promise = std::make_shared<folly::Promise<bool>>();
+  auto future = promise->getSemiFuture();
+  threadpool_.schedule([this, model_weights_path, promise]() mutable {
+    bool status = this->init_model(model_weights_path);
+    promise->setValue(status);
+  });
+  return future;
+}
+
 std::optional<DiTForwardOutput> DiTWorker::step(const DiTForwardInput& inputs) {
+#if defined(USE_NPU)
+  c10_npu::SetDevice(device_.index());
+#elif defined(USE_MLU)
+// TODO(mlu): implement mlu set device
+#endif
   Timer timer;
 
   auto output = dit_model_executor_->forward(inputs.to(device_, dtype_));
-
+#if defined(USE_NPU)
   auto ret = device_.synchronize_default_stream();
+#elif defined(USE_MLU)
+// TODO(mlu): implement mlu synchronize stream
+#endif
   COUNTER_ADD(execution_latency_seconds_model, timer.elapsed_seconds());
-
+  if (!driver_) {
+    return std::nullopt;
+  }
   return output;
+}
+
+folly::SemiFuture<std::optional<DiTForwardOutput>> DiTWorker::step_async(
+    const DiTForwardInput& inputs) {
+  auto sp = std::make_shared<folly::Promise<std::optional<DiTForwardOutput>>>();
+  auto fut = sp->getSemiFuture();
+  threadpool_.schedule([this, inputs, sp]() mutable {
+    auto output = this->step(inputs);
+    sp->setValue(output);
+  });
+  LOG(INFO) << "worker step end";
+  return fut;
+}
+
+void DiTWorker::process_group_test() {
+#if defined(USE_NPU)
+  c10_npu::SetDevice(device_.index());
+#elif defined(USE_MLU)
+  // TODO(mlu): implement mlu process group test
+#endif
+  // create random tensors
+  const auto options = torch::dtype(torch::kHalf).device(device_);
+  torch::Tensor tensor = torch::randn({10, 10}, options);
+  // call allreduce
+  parallel_state::reduce(tensor, context_.get_parallel_args().process_group_);
+  // call allgather
+  parallel_state::gather(tensor, context_.get_parallel_args().process_group_);
 }
 
 folly::SemiFuture<folly::Unit> DiTWorker::process_group_test_async() {
   folly::Promise<folly::Unit> promise;
   auto future = promise.getSemiFuture();
   threadpool_.schedule([this, promise = std::move(promise)]() mutable {
-    this->process_group_test_async();
+    this->process_group_test();
     promise.setValue();
   });
   return future;

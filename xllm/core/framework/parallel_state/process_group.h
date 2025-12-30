@@ -37,21 +37,64 @@ c10::intrusive_ptr<c10d::Store> create_tcp_store(const std::string& host,
                                                  int port,
                                                  int rank);
 
+// class ProcessGroup {
+//  public:
+//   ProcessGroup(const torch::Device& device) : device_(device) {}
+
+//   virtual ~ProcessGroup() = default;
+
+//   // int rank() const {
+//   //   CHECK(pg_ != nullptr) << "Process group is not initialized.";
+//   //   return pg_->getRank();
+//   // }
+
+//   // int world_size() const {
+//   //   CHECK(pg_ != nullptr) << "Process group is not initialized.";
+//   //   return pg_->getSize();
+//   // }
+
+//   int rank() const { return rank_; }
+
+//   int world_size() const { return world_size_; }
+
+//   const torch::Device& device() const { return device_; }
+
+//   // allreduce: reduce the input tensor across all processes, and all
+//   processes
+//   // get the result.
+//   virtual void allreduce(torch::Tensor& input);
+
+//   // allgather: gather tensors from all processes and concatenate them.
+//   virtual void allgather(const torch::Tensor& input,
+//                          std::vector<torch::Tensor>& outputs);
+
+//  private:
+//   // device of current process
+//   torch::Device device_;
+
+//  protected:
+// #if defined(USE_NPU) &&         \
+//     (TORCH_VERSION_MAJOR < 2 || \
+//      (TORCH_VERSION_MAJOR == 2 && TORCH_VERSION_MINOR < 7))
+//   // Using ProcessGroupHCCL for NPU devices
+//   // Note: torch_npu uses an older torch version where c10d::Backend lacks
+//   // shutdown() method
+//   std::unique_ptr<c10d_npu::ProcessGroupHCCL> pg_{nullptr};
+// #else
+//   std::unique_ptr<c10d::Backend> pg_{nullptr};
+// #endif
+// };
+
 class ProcessGroup {
  public:
-  ProcessGroup(const torch::Device& device) : device_(device) {}
+  ProcessGroup(int rank, int world_size, const torch::Device& device)
+      : rank_(rank), world_size_(world_size), device_(device) {}
 
   virtual ~ProcessGroup() = default;
 
-  int rank() const {
-    CHECK(pg_ != nullptr) << "Process group is not initialized.";
-    return pg_->getRank();
-  }
+  int rank() const { return rank_; }
 
-  int world_size() const {
-    CHECK(pg_ != nullptr) << "Process group is not initialized.";
-    return pg_->getSize();
-  }
+  int world_size() const { return world_size_; }
 
   const torch::Device& device() const { return device_; }
 
@@ -64,7 +107,13 @@ class ProcessGroup {
                          std::vector<torch::Tensor>& outputs);
 
  private:
-  // device of current process
+  // rank of current process.
+  int rank_ = 0;
+
+  // number of processes.
+  int world_size_ = 0;
+
+  // device of current process.
   torch::Device device_;
 
  protected:

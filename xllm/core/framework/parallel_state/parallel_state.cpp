@@ -15,6 +15,26 @@ limitations under the License.
 
 #include "parallel_state.h"
 
+#include <c10/core/Device.h>
+#if defined(USE_NPU)
+#include <hccl/hccl_types.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include <acl/acl.h>
+#include <torch_npu/csrc/core/npu/NPUCachingAllocator.h>
+#include <torch_npu/csrc/core/npu/NPUEvent.h>
+#include <torch_npu/csrc/core/npu/NPUStream.h>
+
+#include "hccl/hccl.h"
+#endif
+#pragma GCC diagnostic pop
+#include <glog/logging.h>
+#include <torch/torch.h>
+
+#include <memory>
+#include <torch/csrc/distributed/c10d/Types.hpp>
+#include <vector>
+
 #include "core/util/utils.h"
 
 #if defined(USE_NPU)
@@ -23,6 +43,55 @@ limitations under the License.
 #endif
 
 namespace {
+
+#if defined(USE_NPU)
+// #define HCCLCHECK(cmd)                      \
+//   do {                                      \
+//     HcclResult r = cmd;                     \
+//     if (r != HCCL_SUCCESS) {                \
+//       LOG(FATAL) << "Failed, HCCL error :"; \
+//     }                                       \
+//   } while (0)
+inline const char* hcclResultToString(HcclResult r) {
+  switch (r) {
+    case HCCL_SUCCESS:
+      return "HCCL_SUCCESS";
+    case HCCL_E_PARA:
+      return "HCCL_E_PARA";
+    case HCCL_E_INTERNAL:
+      return "HCCL_E_INTERNAL";
+    case HCCL_E_TIMEOUT:
+      return "HCCL_E_TIMEOUT";
+    case HCCL_E_NOT_SUPPORT:
+      return "HCCL_E_NOT_SUPPORT";
+    default:
+      return "HCCL_E_UNKNOWN";
+  }
+}
+
+#define HCCLCHECK(cmd)                                            \
+  do {                                                            \
+    HcclResult r = (cmd);                                         \
+    if (r != HCCL_SUCCESS) {                                      \
+      LOG(FATAL) << "HCCL call failed: " << #cmd                  \
+                 << ", error = " << hcclResultToString(r) << " (" \
+                 << static_cast<int>(r) << ")";                   \
+    }                                                             \
+  } while (0)
+// #endif
+
+inline bool is_npu(const at::Tensor& tensor) {
+  if (!tensor.defined()) {
+    return false;
+  }
+  return tensor.device().is_privateuseone();
+}
+inline bool is_npu(const at::TensorOptions& options) {
+  return options.device().is_privateuseone();
+}
+inline bool is_npu(const at::Device& device) {
+  return device.is_privateuseone();
+}
 
 torch::Tensor remove_paddings_after_all_gather(
     const torch::Tensor& input,
@@ -44,6 +113,7 @@ torch::Tensor remove_paddings_after_all_gather(
   return torch::cat(group_tensors).contiguous();
 }
 
+#endif
 }  // namespace
 
 namespace xllm {
@@ -171,6 +241,7 @@ torch::Tensor reduce(torch::Tensor& input, ProcessGroup* process_group) {
     return input;
   }
   process_group->allreduce(input);
+  // LOG(INFO) << "finish allreduce.";
   return input;
 }
 
@@ -201,16 +272,22 @@ std::vector<std::unique_ptr<ProcessGroup>> create_npu_process_groups(
     const std::vector<torch::Device>& devices) {
 #if defined(USE_NPU)
   CHECK(!devices.empty()) << "devices should not be empty";
-
+  LOG(INFO) << "device size: " << devices.size();
+  for (const auto& device : devices) {
+    CHECK(is_npu(device)) << "device should be npu device";
+  }
   std::vector<int> device_idxs;
   device_idxs.reserve(devices.size());
   for (const auto& device : devices) {
     device_idxs.push_back(device.index());
+    // LOG(INFO) << "device id: " << device.index();
+    LOG(INFO) << "device id: " << device_idxs.back();
   }
 
   std::vector<HcclComm> comms(devices.size());
   const int world_size = static_cast<int>(devices.size());
-  // HCCLCHECK(HcclCommInitAll(world_size, device_idxs.data(),comms.data()));
+  HCCLCHECK(HcclCommInitAll(world_size, device_idxs.data(), comms.data()));
+  LOG(INFO) << "HcclCommInitAll success.";
 
   std::vector<std::unique_ptr<ProcessGroup>> process_groups;
   process_groups.reserve(devices.size());

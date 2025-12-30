@@ -299,7 +299,9 @@ class FluxPipelineImpl : public FluxPipelineBaseImpl {
             noise_pred + (noise_pred - negative_noise_pred) * true_cfg_scale;
         negative_noise_pred.reset();
       }
+      LOG(INFO) << "scheduler_ step before.";
       auto prev_latents = scheduler_->step(noise_pred, t, prepared_latents);
+      LOG(INFO) << "scheduler_ step after.";
       prepared_latents = prev_latents.detach();
       std::vector<torch::Tensor> tensors = {prepared_latents, noise_pred};
       noise_pred.reset();
@@ -317,8 +319,11 @@ class FluxPipelineImpl : public FluxPipelineBaseImpl {
     unpacked_latents =
         (unpacked_latents / vae_scaling_factor_) + vae_shift_factor_;
     unpacked_latents = unpacked_latents.to(options_.dtype());
+    LOG(INFO) << "vae decode before.";
     image = vae_->decode(unpacked_latents);
+    LOG(INFO) << "vae decode after.";
     image = vae_image_processor_->postprocess(image);
+    LOG(INFO) << "vae postprocess.";
     return std::vector<torch::Tensor>{{image}};
   }
 

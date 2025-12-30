@@ -15,6 +15,10 @@ limitations under the License.
 
 #pragma once
 
+#include <hccl/hccl_types.h>
+#include <torch_npu/csrc/core/npu/NPUEvent.h>
+#include <torch_npu/csrc/core/npu/NPUStream.h>
+
 #include "hccl/hccl.h"
 #include "process_group.h"
 
@@ -40,8 +44,18 @@ class ProcessGroupImpl : public ProcessGroup {
   // Destructor.
   ~ProcessGroupImpl() override;
 
+  void allreduce(torch::Tensor& input) override;
+
+  // void allgather(torch::Tensor )
+  void allgather(const torch::Tensor& input,
+                 std::vector<torch::Tensor>& outputs) override;
+
+  void flush_comm_to_current();
+
  private:
   HcclComm comm_ = nullptr;
+  c10_npu::NPUStream comm_stream_;
+  c10_npu::NPUEvent last_comm_event_;
 };
 
 }  // namespace xllm
