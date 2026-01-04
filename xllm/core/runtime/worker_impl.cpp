@@ -92,7 +92,7 @@ bool WorkerImpl::allocate_kv_cache(
   CHECK(kv_caches_.empty()) << "KV caches are already initialized.";
 
   // create a KVCache for each layer
-  const int64_t num_layers = context_.get_model_args().n_layers();
+  const int64_t num_layers = get_num_layers();
   const bool enable_lighting_indexer =
       context_.get_model_args().index_n_heads() > 0;
   kv_caches_.reserve(num_layers);
@@ -738,6 +738,21 @@ void WorkerImpl::prepare_mla_prefixcache_inputs(
   input_params.ring_cache_seqlen_host = std::vector<int>(
       ring_cache_seqlen_host.data_ptr<int>(),
       ring_cache_seqlen_host.data_ptr<int>() + ring_cache_seqlen_host.numel());
+}
+
+int64_t WorkerImpl::get_num_layers() const {
+  int64_t num_layers = context_.get_model_args().n_layers();
+#if !defined(USE_NPU)
+  if (is_spec_draft_) {
+    // for MTP draft models, the number of layers is the number of nextn predict
+    // layers
+    std::string model_type = context_.get_model_args().model_type();
+    if (model_type == "deepseek_mtp") {
+      num_layers = context_.get_model_args().num_nextn_predict_layers();
+    }
+  }
+#endif
+  return num_layers;
 }
 
 }  // namespace xllm
