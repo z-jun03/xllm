@@ -131,8 +131,6 @@ DECLARE_bool(enable_customize_mla_kernel);
 
 DECLARE_bool(enable_atb_comm_multiprocess);
 
-DECLARE_string(tool_call_parser);
-
 DECLARE_bool(enable_atb_spec_kernel);
 
 DECLARE_bool(enable_block_copy_kernel);
@@ -214,6 +212,8 @@ DECLARE_bool(enable_beam_search_kernel);
 DECLARE_bool(enable_qwen3_reranker);
 
 DECLARE_string(reasoning_parser);
+
+DECLARE_string(tool_call_parser);
 
 DECLARE_bool(enable_shm);
 
