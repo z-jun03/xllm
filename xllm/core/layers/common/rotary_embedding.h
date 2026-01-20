@@ -94,14 +94,15 @@ class DeepseekScalingRotaryEmbeddingImpl : public torch::nn::Module {
       float mscale_all_dim,
       const torch::TensorOptions& options);
 
-  void forward(torch::Tensor& q,
-               torch::Tensor& k,
+  void forward(torch::Tensor& input,
                const torch::Tensor& positions,
                const torch::Tensor& cu_query_lens,
                int64_t max_query_len,
                bool is_prompt);
 
   torch::Tensor get_cos_sin_cache() { return cos_sin_cache_; }
+  torch::Tensor get_sin_cache() { return sin_; }
+  torch::Tensor get_cos_cache() { return cos_; }
 
  private:
   int64_t head_size_;
