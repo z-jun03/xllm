@@ -113,6 +113,16 @@ class IndexerImpl : public torch::nn::Module {
       const AttentionMetadata& attn_metadata,
       bool is_prefill,
       int64_t num_tokens);
+
+  torch::Tensor preprocess_indexer_q(const torch::Tensor& qr,
+                                     const torch::Tensor& positions,
+                                     const AttentionMetadata& attn_metadata);
+
+  std::tuple<torch::Tensor, torch::Tensor> preprocess_indexer_k(
+      const torch::Tensor& x,
+      const torch::Tensor& positions,
+      torch::Tensor& k_cache,
+      const AttentionMetadata& attn_metadata);
 };
 
 TORCH_MODULE(Indexer);
