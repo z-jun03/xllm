@@ -49,8 +49,13 @@ ColumnParallelLinearImpl::ColumnParallelLinearImpl(
       process_group_(process_group),
       device_(options.device()),
       linear_extra_args_(linear_extra_args) {
+  LOG(INFO) << "in_features: " << in_features;
+  if (process_group_ == nullptr) LOG(FATAL) << "process_group_ is null!";
+  LOG(INFO) << "process_group_->rank(); " << process_group_->rank();
   rank_ = process_group_->rank();
+  LOG(INFO) << "rank: " << rank_;
   world_size_ = process_group_->world_size();
+  LOG(INFO) << " world_size: " << process_group_->world_size();
   CHECK(out_features % world_size_ == 0)
       << "out_features " << out_features << " not divisible by world_size "
       << world_size_;
@@ -58,6 +63,7 @@ ColumnParallelLinearImpl::ColumnParallelLinearImpl(
   // Note: torch.nn.functional.linear performs XA^T + b and as a result
   // we allocate the transpose.
   if (quant_args_.quant_method() == "smoothquant") {
+    LOG(INFO) << "SmoothQuant is enabled";
     qweight_ = register_parameter(
         "qweight",
         torch::empty({out_features_per_partition, in_features},
@@ -75,6 +81,7 @@ ColumnParallelLinearImpl::ColumnParallelLinearImpl(
     // output dtype for scaled_matmul
     output_dtype_ = c10::typeMetaToScalarType(options.dtype());
   } else {
+    LOG(INFO) << "SmoothQuant is disabled";
     weight_ = register_parameter(
         "weight",
         torch::empty({out_features_per_partition, in_features}, options),

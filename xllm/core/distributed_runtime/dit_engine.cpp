@@ -93,7 +93,7 @@ bool DiTEngine::init_model() {
   LOG(INFO) << "Starting to init model on " << workers_.size() << " workers.";
   futures.reserve(workers_.size());
   for (auto& worker : workers_) {
-    futures.push_back(worker->init_model(model_path));
+    futures.push_back(worker->init_model_async(model_path));
   }
 
   // wait for all futures to complete
@@ -119,7 +119,7 @@ DiTForwardOutput DiTEngine::step(std::vector<DiTBatch>& batches) {
   std::vector<folly::SemiFuture<std::optional<DiTForwardOutput>>> futures;
   futures.reserve(workers_.size());
   for (auto& worker : workers_) {
-    futures.emplace_back(worker->step(forward_inputs));
+    futures.emplace_back(worker->step_async(forward_inputs));
   }
 
   // wait for the all future to complete
