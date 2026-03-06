@@ -93,6 +93,10 @@ const OptionCategory kBeamSearchOptions = {"BEAM SEARCH OPTIONS",
                                             "enable_rec_fast_sampler",
                                             "enable_topk_sorted"}};
 
+const OptionCategory kPrefixCacheOptions = {
+    "PREFIX CACHE OPTIONS",
+    {"enable_prefix_cache", "xxh3_128bits_seed"}};
+
 const OptionCategory kOtherOptions = {
     "OTHER OPTIONS",
     {"max_concurrent_requests",
@@ -112,6 +116,7 @@ const std::vector<OptionCategory> kOptionCategories = {
     kMtpOptions,
     kXllmServiceOptions,
     kBeamSearchOptions,
+    kPrefixCacheOptions,
     kOtherOptions};
 
 }  // namespace

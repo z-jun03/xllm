@@ -274,7 +274,7 @@ DEFINE_bool(enable_cache_upload,
             "Whether to upload cache info to service. This feature is only "
             "available when service routing is enabled.");
 
-DEFINE_uint32(murmur_hash3_seed, 1024, "Default Murmur Hash seed.");
+DEFINE_uint32(xxh3_128bits_seed, 1024, "Default XXH3 128-bits hash seed.");
 
 // --- serving on multi-nodes config ---
 
