@@ -75,15 +75,16 @@ limitations under the License.
 #include "llm/qwen3.h"      // IWYU pragma: keep
 #include "llm/qwen3_moe.h"  // IWYU pragma: keep
 #elif defined(USE_CUDA)
-#include "dit/pipeline_longcat_image.h"  // IWYU pragma: keep
-#include "llm/qwen2.h"                   // IWYU pragma: keep
-#include "llm/qwen3.h"                   // IWYU pragma: keep
-#include "llm/qwen3_moe.h"               // IWYU pragma: keep
-#include "vlm/qwen2_5_vl.h"              // IWYU pragma: keep
-#include "vlm/qwen2_vl.h"                // IWYU pragma: keep
-#include "vlm/qwen2_vl_embedding.h"      // IWYU pragma: keep
-#include "vlm/qwen3_vl.h"                // IWYU pragma: keep
-#include "vlm/qwen3_vl_moe.h"            // IWYU pragma: keep
+#include "dit/pipeline_longcat_image.h"       // IWYU pragma: keep
+#include "dit/pipeline_longcat_image_edit.h"  // IWYU pragma: keep
+#include "llm/qwen2.h"                        // IWYU pragma: keep
+#include "llm/qwen3.h"                        // IWYU pragma: keep
+#include "llm/qwen3_moe.h"                    // IWYU pragma: keep
+#include "vlm/qwen2_5_vl.h"                   // IWYU pragma: keep
+#include "vlm/qwen2_vl.h"                     // IWYU pragma: keep
+#include "vlm/qwen2_vl_embedding.h"           // IWYU pragma: keep
+#include "vlm/qwen3_vl.h"                     // IWYU pragma: keep
+#include "vlm/qwen3_vl_moe.h"                 // IWYU pragma: keep
 #elif defined(USE_MUSA)
 #include "llm/musa/qwen3.h"  // IWYU pragma: keep
 #else
