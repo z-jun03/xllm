@@ -61,8 +61,8 @@ FusedMoEImpl::FusedMoEImpl(const ModelArgs& model_args,
   // smoothquant check: if quant_method is not empty, only smoothquant with
   // A8 and expert W8/W4 is supported.
   if (!quant_args.quant_method().empty()) {
-    if (quant_args.quant_method() != "smoothquant" || quant_args.bits() != 8 ||
-        !quant_args.activation_dynamic() ||
+    if (quant_args.quant_method() != kQuantMethodSmoothquant ||
+        quant_args.bits() != 8 || !quant_args.activation_dynamic() ||
         (moe_weight_bits_ != 8 && moe_weight_bits_ != 4)) {
       LOG(FATAL)
           << "FusedMoE only supports the current SmoothQuant MoE path with "
@@ -85,7 +85,7 @@ FusedMoEImpl::FusedMoEImpl(const ModelArgs& model_args,
     // so we will assume the max_token_num is limited to max_batch_size * (1+K)
     // K is the number of speculative tokens.
     int64_t dispatch_token_size;
-    if (quant_args.quant_method() == "smoothquant") {
+    if (quant_args.quant_method() == kQuantMethodSmoothquant) {
       // float32 is for the scale of the quantized input
       dispatch_token_size = hidden_size_ * get_dtype_size(torch::kInt8) +
                             get_dtype_size(torch::kFloat32);
