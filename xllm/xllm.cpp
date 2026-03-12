@@ -55,8 +55,7 @@ static std::unordered_set<std::string> deepseek_like_model_set = {
     "deepseek_v32_mtp",
     "kimi_k2",
     "glm4_moe_lite",
-    "glm5_moe",
-    "glm_moe_dsa",
+    "glm_moe_dsa",  // glm5 model type
     "joyai_llm_flash"};
 
 static const std::unordered_set<std::string> prefill_sp_supported_model_set = {
