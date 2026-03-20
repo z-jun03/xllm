@@ -141,5 +141,6 @@ cc_library(
     torch
     torch_npu
     xllm_atb_layers
+    ${NPU_RUNTIME_SO}
     nnopbase
 )
