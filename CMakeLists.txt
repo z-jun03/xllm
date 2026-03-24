@@ -334,6 +334,7 @@ if(USE_NPU)
       $ENV{NPU_HOME_PATH}/include
       $ENV{ATB_HOME_PATH}/include
       $ENV{NPU_HOME_PATH}/opp/vendors/xllm/op_api/include/
+      ${CMAKE_CURRENT_SOURCE_DIR}/third_party/torch_npu_ops/
   )
   # Keep third-party warnings suppressed while providing headers expected by
   # legacy includes like "atb_speed/log.h" from xllm_atb_layers.
