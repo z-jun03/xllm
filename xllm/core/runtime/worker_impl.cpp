@@ -30,6 +30,7 @@ limitations under the License.
 #include <c10/cuda/CUDACachingAllocator.h>
 #endif
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,6 +47,7 @@ limitations under the License.
 #include "core/distributed_runtime/master.h"
 #include "framework/kv_cache/kv_cache.h"
 #include "framework/model/model_input_params.h"
+#include "framework/model/npu_cp_ep_padding.h"
 #include "framework/model_loader.h"
 #include "framework/sampling/sampler.h"
 #include "framework/state_dict/state_dict.h"
@@ -126,9 +128,10 @@ WorkerImpl::WorkerImpl(const ParallelArgs& parallel_args,
 
   // first worker is the driver
   driver_ = parallel_args.rank() == 0;
-  int32_t tp_size = parallel_args.world_size() / parallel_args.dp_size();
-  dp_driver_ =
-      parallel_args.dp_size() > 1 && parallel_args.rank() % tp_size == 0;
+  int32_t tp_size = parallel_args.world_size() /
+                    (parallel_args.dp_size() * parallel_args.cp_size());
+  dp_driver_ = parallel_args.dp_size() > 1 &&
+               parallel_args.rank() % (tp_size * parallel_args.cp_size()) == 0;
 
   device_.set_device();
   device_.init_device_context();
@@ -547,8 +550,28 @@ void WorkerImpl::prepare_work_before_execute(const ForwardInput& input,
   }
 #endif
   c10::StreamGuard streamGuard = prepare_stream_->set_stream_guard();
-
   processed_input = input.to(device_, dtype_);
+
+#if defined(USE_NPU)
+  CpPrefillInputs tmp_cp_inputs;
+  if (parallel_args_.cp_size() > 1 &&
+      input.input_params.batch_forward_type.is_prefill()) {
+    tmp_cp_inputs = prepare_cp_prefill_inputs(parallel_args_.cp_size(),
+                                              input.token_ids,
+                                              input.positions,
+                                              input.input_params.q_seq_lens);
+    processed_input.input_params.cp_prefill_inputs = tmp_cp_inputs.to(device_);
+    CpEpPadding cp_ep_padding(
+        input.token_ids,
+        context_.get_model_args().num_experts_per_tok(),
+        context_.get_parallel_args().mapping_data(),
+        /*device=*/device_,
+        dtype_,
+        /*is_prefill=*/input.input_params.batch_forward_type.is_prefill());
+    processed_input.input_params.cp_ep_padding_data = cp_ep_padding.build();
+  }
+#endif
+
   auto& input_params = processed_input.input_params;
 
 #if defined(USE_NPU)
@@ -590,6 +613,7 @@ void WorkerImpl::prepare_work_before_execute(const ForwardInput& input,
   }
 
   if (!context_.get_parallel_args().mapping_data().empty() &&
+      !(context_.get_parallel_args().cp_size() > 1) &&
       (context_.get_parallel_args().dp_size() > 1 ||
        context_.get_parallel_args().ep_size() > 1)) {
     torch::Tensor token_size_per_dp_group =
