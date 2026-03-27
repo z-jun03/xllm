@@ -1,4 +1,5 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
+Copyright 2024 The ScaleLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,9 +16,11 @@ limitations under the License.
 
 #pragma once
 
-#include "llama.h"
+#include <filesystem>
+#include <string>
 
-namespace xllm::npu::model {
-// register the causal model
-REGISTER_CAUSAL_MODEL(llama3, LlamaForCausalLM);
-}  // namespace xllm::npu::model
+namespace xllm {
+
+std::string get_model_type(const std::filesystem::path& model_path);
+
+}  // namespace xllm

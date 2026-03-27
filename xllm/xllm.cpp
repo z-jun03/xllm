@@ -37,6 +37,7 @@ limitations under the License.
 #include "core/framework/xtensor/xtensor_allocator.h"
 #include "core/util/device_name_utils.h"
 #include "core/util/json_reader.h"
+#include "core/util/model_config_utils.h"
 #include "core/util/net.h"
 #include "core/util/utils.h"
 #include "function_call/function_call_parser.h"
@@ -67,33 +68,6 @@ void shutdown_handler(int signal) {
   // TODO: gracefully shutdown the server
   LOG(WARNING) << "Received signal " << signal << ", stopping server...";
   exit(1);
-}
-
-std::string get_model_type(const std::filesystem::path& model_path) {
-  JsonReader reader;
-  // for llm, vlm and rec models, the config.json file is in the model path
-  std::filesystem::path config_json_path = model_path / "config.json";
-
-  if (std::filesystem::exists(config_json_path)) {
-    reader.parse(config_json_path);
-    // Prefer model_type (e.g. LLM/VLM); fall back to model_name for configs
-    // that only have model_name (e.g. LongCat-Image: {"model_name":
-    // "LongCat-Image"}).
-    auto model_type = reader.value<std::string>("model_type");
-    if (!model_type.has_value()) {
-      model_type = reader.value<std::string>("model_name");
-    }
-    if (!model_type.has_value()) {
-      LOG(FATAL) << "Please check config.json file in model path: "
-                 << model_path
-                 << ", it should contain model_type or model_name key.";
-    }
-    return model_type.value();
-  } else {
-    LOG(FATAL) << "Please check config.json or model_index.json file, one of "
-                  "them should exist in the model path: "
-               << model_path;
-  }
 }
 
 std::string get_model_backend(const std::filesystem::path& model_path) {
@@ -245,6 +219,9 @@ int run() {
 
   // Create Master
   Options options;
+#if defined(USE_NPU)
+  options.npu_kernel_backend(FLAGS_npu_kernel_backend);
+#endif
   options.model_path(FLAGS_model)
       .model_id(FLAGS_model_id)
       .task_type(FLAGS_task)
