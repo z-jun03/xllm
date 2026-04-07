@@ -94,11 +94,14 @@ const OptionCategory kXllmServiceOptions = {
     "XLLM-SERVICE OPTIONS",
     {"etcd_addr", "rank_tablefile", "etcd_namespace"}};
 
-const OptionCategory kBeamSearchOptions = {"BEAM SEARCH OPTIONS",
-                                           {"enable_beam_search_kernel",
-                                            "enable_rec_fast_sampler",
-                                            "enable_topk_sorted",
-                                            "output_rec_logprobs"}};
+const OptionCategory kBeamSearchOptions = {
+    "BEAM SEARCH OPTIONS",
+    {"enable_beam_search_kernel", "enable_topk_sorted"}};
+
+const OptionCategory kRecOptions = {"REC OPTIONS",
+                                    {"enable_rec_fast_sampler",
+                                     "enable_rec_prefill_only",
+                                     "output_rec_logprobs"}};
 
 const OptionCategory kPrefixCacheOptions = {
     "PREFIX CACHE OPTIONS",
@@ -124,6 +127,7 @@ const std::vector<OptionCategory> kOptionCategories = {
     kMtpOptions,
     kXllmServiceOptions,
     kBeamSearchOptions,
+    kRecOptions,
     kPrefixCacheOptions,
     kOtherOptions};
 
