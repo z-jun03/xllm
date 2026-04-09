@@ -118,6 +118,8 @@ bool MTPWorkerImpl::allocate_kv_cache(
   // init_model() must run first so dtype_/embedding_size_ are initialized.
   embedding_cache_ = std::make_shared<EmbeddingCache>(num_blocks);
   if (embedding_cache_) {
+    embedding_cache_->set_probs_placeholder(
+        torch::ones({}, torch::dtype(torch::kFloat32).device(torch::kCPU)));
     int64_t size = get_embedding_placeholder_size();
     if (size > 0) {
       embedding_cache_->set_placeholder(
@@ -157,7 +159,8 @@ bool MTPWorkerImpl::allocate_kv_cache_with_transfer(
         options_.device_ip().value(),
         options_.transfer_listen_port(),
         options_.instance_role(),
-        context_.get_model_args().model_type());
+        context_.get_model_args().model_type(),
+        context_.get_model_args().index_n_heads() > 0);
 
     int32_t device_id = device_.index();
     kv_cache_transfer_->initialize(device_id);
@@ -183,6 +186,8 @@ bool MTPWorkerImpl::allocate_kv_cache_with_transfer(
 
   embedding_cache_ = std::make_shared<EmbeddingCache>(kv_cache_shape[0][0]);
   if (embedding_cache_) {
+    embedding_cache_->set_probs_placeholder(
+        torch::ones({}, torch::dtype(torch::kFloat32).device(device_)));
     int64_t size = get_embedding_placeholder_size();
     if (size > 0) {
       embedding_cache_->set_placeholder(
