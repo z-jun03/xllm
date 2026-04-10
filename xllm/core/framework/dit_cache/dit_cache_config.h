@@ -22,7 +22,8 @@ enum class PolicyType {
   FBCache,
   TaylorSeer,
   FBCacheTaylorSeer,
-  ResidualCache
+  ResidualCache,
+  DiCache
 };
 
 struct DiTBaseCacheOptions {
@@ -68,11 +69,18 @@ struct ResidualCacheOptions {
   int64_t skip_interval_steps = 3;
 };
 
+struct DiCacheOptions {
+  int64_t probe_depth = 1;
+  double rel_l1_thresh = 0.4;
+  double ret_ratio = 0.2;
+  std::string error_choice = "delta_y";
+};
+
 struct DiTCacheConfig {
   DiTCacheConfig() = default;
 
   // the selected cache policy.
-  PolicyType selected_policy = PolicyType::None;
+  PolicyType selected_policy = PolicyType::DiCache;
 
   // the configuration for FBCache policy.
   FBCacheOptions fbcache;
@@ -85,6 +93,8 @@ struct DiTCacheConfig {
 
   // the configuration for ResidualCache policy.
   ResidualCacheOptions residual_cache;
+
+  DiCacheOptions dicache;
 };
 
 }  // namespace xllm

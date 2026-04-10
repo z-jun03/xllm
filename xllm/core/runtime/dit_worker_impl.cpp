@@ -72,6 +72,8 @@ DiTCacheConfig parse_dit_cache_from_flags() {
         FLAGS_dit_cache_end_blocks;
     cache_config.residual_cache.skip_interval_steps =
         FLAGS_dit_cache_skip_interval_steps;
+  } else if (FLAGS_dit_cache_policy == "DiCache") {
+    cache_config.selected_policy = PolicyType::DiCache;
   } else if (FLAGS_dit_cache_policy == "None") {
     cache_config.selected_policy = PolicyType::None;
   }

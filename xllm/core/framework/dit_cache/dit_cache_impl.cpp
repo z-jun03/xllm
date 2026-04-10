@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "dit_cache_impl.h"
 
+#include "dicache.h"
 #include "dit_non_cache.h"
 #include "fbcache.h"
 #include "fbcache_taylorseer.h"
@@ -51,14 +52,22 @@ bool DitCacheImpl::is_similar(const torch::Tensor& lhs,
 std::unique_ptr<DitCacheImpl> create_dit_cache(const DiTCacheConfig& cfg) {
   switch (cfg.selected_policy) {
     case PolicyType::FBCache:
+      LOG(INFO) << "using FBCache policy for DiCache";
       return std::make_unique<FBCache>();
     case PolicyType::TaylorSeer:
+      LOG(INFO) << "using TaylorSeer policy for DiCache";
       return std::make_unique<TaylorSeer>();
     case PolicyType::FBCacheTaylorSeer:
+      LOG(INFO) << "using FBCacheTaylorSeer policy for DiCache";
       return std::make_unique<FBCacheTaylorSeer>();
     case PolicyType::ResidualCache:
+      LOG(INFO) << "using ResidualCache policy for DiCache";
       return std::make_unique<ResidualCache>();
+    case PolicyType::DiCache:
+      LOG(INFO) << "using DiCache policy for DiCache";
+      return std::make_unique<DiCache>();
     default:
+      LOG(INFO) << "unknown cache policy, defaulting to no cache";
       return std::make_unique<DiTNonCache>();
   }
 }
