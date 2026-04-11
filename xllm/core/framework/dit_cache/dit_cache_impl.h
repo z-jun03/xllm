@@ -24,12 +24,37 @@ namespace xllm {
 
 using TensorMap = std::unordered_map<std::string, torch::Tensor>;
 
+struct DiTCacheRuntimeContext {
+  // cfg parallel runtime info
+  void* cfg_group = nullptr;  // 先用 void*，避免这里直接 include ProcessGroup
+  int64_t cfg_rank = 0;
+  int64_t cfg_world_size = 1;
+  bool cfg_enabled = false;
+  float true_cfg_scale = 1.0f;
+
+  void* sp_group = nullptr;
+  int64_t sp_rank = 0;
+  int64_t sp_world_size = 2;
+  bool sp_enabled = true;
+  // optional runtime metadata
+  int64_t infer_steps = 0;
+  int64_t num_blocks = 0;
+};
+
 class DitCacheImpl {
  public:
   DitCacheImpl() = default;
   virtual ~DitCacheImpl() = default;
 
   virtual void init(const DiTCacheConfig& cfg) = 0;
+
+  virtual void set_runtime_context(const DiTCacheRuntimeContext& ctx) {
+    runtime_ctx_ = ctx;
+  }
+
+  const DiTCacheRuntimeContext& get_runtime_context() const {
+    return runtime_ctx_;
+  }
 
   virtual bool on_before_block(const CacheBlockIn& blockin) = 0;
   virtual CacheBlockOut on_after_block(const CacheBlockIn& blockin) = 0;
@@ -52,12 +77,12 @@ class DitCacheImpl {
   int64_t infer_steps_;
   int64_t num_blocks_;
   TensorMap buffers;
-
+  DiTCacheRuntimeContext runtime_ctx_;
   static torch::Tensor get_tensor_or_empty(const TensorMap& m,
                                            const std::string& k);
-  static bool is_similar(const torch::Tensor& lhs,
-                         const torch::Tensor& rhs,
-                         float threshold);
+  bool is_similar(const torch::Tensor& lhs,
+                  const torch::Tensor& rhs,
+                  float threshold);
 };
 
 std::unique_ptr<DitCacheImpl> create_dit_cache(const DiTCacheConfig& cfg);

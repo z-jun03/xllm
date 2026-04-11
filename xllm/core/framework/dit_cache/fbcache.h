@@ -37,6 +37,8 @@ class FBCache : public DitCacheImpl {
   bool on_before_step(const CacheStepIn& stepin) override;
   CacheStepOut on_after_step(const CacheStepIn& stepin) override;
 
+  void set_runtime_context(const DiTCacheRuntimeContext& ctx) override;
+
  private:
   std::pair<torch::Tensor, torch::Tensor> apply_prev_hidden_states_residual(
       const torch::Tensor& hidden_states,

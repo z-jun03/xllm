@@ -390,6 +390,16 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
     bool has_neg_prompt = negative_prompts.size() > 0;
 
     bool do_true_cfg = (true_cfg_scale > 1.0) && has_neg_prompt;
+    DiTCacheRuntimeContext ctx;
+    ctx.sp_group = static_cast<void*>(parallel_args_.dit_sp_group_);
+    // ctx.sp_rank = parallel_args_.dit_cfg_group_
+    //  ? parallel_args_.dit_cfg_group_->rank()
+    //  : 0;;
+
+    ctx.true_cfg_scale = generation_params.true_cfg_scale;
+    ctx.infer_steps = num_inference_steps;
+    DiTCache::get_instance().set_runtime_context(ctx);
+
     // inplace update prompt_embeds and prompt_embeds_mask
     _encode_prompt(condition_images,
                    prompts,
@@ -489,7 +499,7 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
                                              main_shape,
                                              txt_seq_lens,
                                              /*use_cfg=*/false,
-                                             /*step_index=*/i);
+                                             /*step_index=*/i + 1);
           noise_pred = noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =
               xllm::parallel_state::gather(noise_pred,
@@ -503,7 +513,7 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
                                                  main_shape,
                                                  negative_txt_seq_lens,
                                                  /*use_cfg=*/true,
-                                                 /*step_index=*/i);
+                                                 /*step_index=*/i + 1);
 
           neg_noise_pred = neg_noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =

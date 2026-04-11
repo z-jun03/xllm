@@ -64,6 +64,10 @@ class DiTCache {
     active_cache_->set_num_blocks(num_blocks);
     active_cond_cache_->set_num_blocks(num_blocks);
   }
+  void set_runtime_context(const DiTCacheRuntimeContext& ctx) {
+    active_cache_->set_runtime_context(ctx);
+    active_cond_cache_->set_runtime_context(ctx);
+  }
 
  private:
   torch::Tensor get_tensor_or_empty(const TensorMap& m, const std::string& k);

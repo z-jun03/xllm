@@ -29,7 +29,24 @@ void FBCache::init(const DiTCacheConfig& cfg) {
   buffers.clear();
 }
 
+void FBCache::set_runtime_context(const DiTCacheRuntimeContext& ctx) {
+  DitCacheImpl::set_runtime_context(ctx);
+  // You can also add any FBCache specific context handling here if needed
+  if (ctx.infer_steps > 0) {
+    infer_steps_ = ctx.infer_steps;
+  }
+}
+
 bool FBCache::on_before_block(const CacheBlockIn& blockin) {
+  LOG(INFO) << "on_before_block: step " << current_step_ << ", block "
+            << blockin.block_id;
+
+  if (use_cache_) {
+    LOG(INFO) << "skip step " << current_step_ << " block " << blockin.block_id
+              << " due to previous decision, returning approximate final "
+                 "hidden states";
+    // return true;
+  }
   return use_cache_;
 }
 

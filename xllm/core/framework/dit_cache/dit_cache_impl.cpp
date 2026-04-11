@@ -18,6 +18,7 @@ limitations under the License.
 #include "dit_non_cache.h"
 #include "fbcache.h"
 #include "fbcache_taylorseer.h"
+#include "framework/parallel_state/parallel_state.h"
 #include "residual_cache.h"
 #include "taylorseer.h"
 
@@ -40,12 +41,66 @@ bool DitCacheImpl::is_similar(const torch::Tensor& lhs,
     return torch::allclose(lhs, rhs);
   }
 
-  auto diff = (lhs - rhs).abs();
-  auto mean_diff = diff.mean();
-  auto mean_lhs = lhs.abs().mean();
+  torch::Device dev = lhs.device();
+  auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(dev);
+  // auto sum_abs_diff = (lhs - rhs).abs().sum().to(torch::kFloat32);
+  // auto sum_abs_lhs = lhs.abs().sum().to(torch::kFloat32);
+  // auto count = torch::tensor({static_cast<float>(lhs.numel())}, opts);
+  auto local_diff = (lhs - rhs).abs().sum().to(torch::kFloat64);
+  auto local_lhs = lhs.abs().sum().to(torch::kFloat64);
+  auto local_count = torch::tensor(static_cast<double>(lhs.numel()), opts);
 
+  if (runtime_ctx_.sp_enabled && runtime_ctx_.sp_world_size > 1 &&
+      runtime_ctx_.sp_group != nullptr) {
+    auto* sp_group = static_cast<ProcessGroup*>(runtime_ctx_.sp_group);
+    CHECK(sp_group != nullptr)
+        << "sp_group is null in DitCacheImpl::is_similar";
+    LOG(INFO) << "before value and shape：" << "sum_abs_diff " << local_diff
+              << "sum_abs_lhs " << local_lhs << "count" << local_count;
+    local_diff = xllm::parallel_state::reduce(local_diff, sp_group);
+    local_lhs = xllm::parallel_state::reduce(local_lhs, sp_group);
+    local_count = xllm::parallel_state::reduce(local_count, sp_group);
+    LOG(INFO) << "after value and shape：" << "sum_abs_diff " << local_diff
+              << "sum_abs_lhs " << local_lhs << "count" << local_count;
+  }
+  auto mean_diff = local_diff / local_count;
+  auto mean_lhs = local_lhs / local_count;
   auto rel = mean_diff / (mean_lhs + 1e-6);
-  return (rel < threshold).item<bool>();
+
+  LOG(INFO) << "rel.item<double>(): " << rel.item<double>();
+
+  return rel.item<double>() < threshold;
+
+  // auto mean_diff = sum_abs_diff / count;
+  // auto mean_lhs = sum_abs_lhs / count;
+
+  // // auto diff = (lhs - rhs).abs();
+  // // auto mean_diff = diff.mean();
+  // // auto mean_lhs = lhs.abs().mean();
+
+  // auto rel = mean_diff / (mean_lhs + 1e-6);
+  // // auto* sp_group = static_cast<ProcessGroup*>(runtime_ctx_.sp_group);
+  // // if (!sp_group) {
+  //   return (rel < threshold).item<bool>();
+  // }
+  // torch::Device dev = lhs.device();
+  // auto options = torch::TensorOptions().dtype(torch::kFloat32).device(dev);
+  // auto local_tensor = torch::tensor(rel.item<double>(),
+  // options).unsqueeze(0);  // 本地张量，值为 rel
+  // // auto gathered_tensor = torch::empty({runtime_ctx_.sp_world_size},
+  // options); auto gathered_tensor =
+  // xllm::parallel_state::gather(local_tensor,sp_group);
+  // // auto gathered_cpu =
+  // gathered_tensor.to(torch::kCPU).contiguous().view({-1}); auto gathered_flat
+  // = gathered_tensor.contiguous().view({-1});  // 展平为 [world_size]
+  // // auto global_mean = gathered_flat.mean().item<float>();  // 计算所有 rank
+  // rel 的平均值 auto global_mean =
+  // static_cast<float>(gathered_flat.mean().item<double>());
+
+  // // 6. 基于全局平均值判断，所有 rank 返回一致结果
+  // return global_mean < threshold;
+
+  // return (rel < threshold).item<bool>();
 }
 
 std::unique_ptr<DitCacheImpl> create_dit_cache(const DiTCacheConfig& cfg) {
