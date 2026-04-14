@@ -1,3 +1,18 @@
+# Release xllm 0.9.1
+
+## **Release Notes**
+
+### Highlights
+- Improve overall runtime stability and robustness for long-sequence and multi-scenario serving.
+- Refine distributed runtime behavior and compatibility under production deployments.
+- Enhance maintainability with incremental bug fixes and cleanup.
+
+### Bugfix
+- Fix ACL graph related stability issues in DeepSeek-3.2 scenarios.
+- Improve CP/MTP compatibility behavior in edge cases.
+- Fix etcd auth and service registration related reliability issues.
+- Address memory rollback and worker lifecycle corner-case failures.
+
 # Release xllm 0.9.0
 
 ## **Major Features and Improvements**
