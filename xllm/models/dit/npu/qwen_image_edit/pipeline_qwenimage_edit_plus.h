@@ -467,6 +467,36 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
     if (do_true_cfg && negative_prompt_embeds_mask.defined()) {
       negative_txt_seq_lens = negative_prompt_embeds_mask.sum(1);
     }
+    DiTCacheRuntimeContext ctx;
+    // CFG parallel
+    ctx.cfg_group = static_cast<void*>(parallel_args_.dit_cfg_group_);
+    ctx.cfg_rank = parallel_args_.dit_cfg_group_
+                       ? parallel_args_.dit_cfg_group_->rank()
+                       : 0;
+    ctx.cfg_world_size = parallel_args_.dit_cfg_group_
+                             ? parallel_args_.dit_cfg_group_->world_size()
+                             : 1;
+    ctx.cfg_enabled = (FLAGS_cfg_size == 2 && do_true_cfg &&
+                       parallel_args_.dit_cfg_group_ != nullptr);
+
+    // sequence parallel
+    ctx.sp_group = static_cast<void*>(parallel_args_.dit_sp_group_);
+    ctx.sp_rank =
+        parallel_args_.dit_sp_group_ ? parallel_args_.dit_sp_group_->rank() : 0;
+    ctx.sp_world_size = parallel_args_.dit_sp_group_
+                            ? parallel_args_.dit_sp_group_->world_size()
+                            : 1;
+    ctx.sp_enabled =
+        (FLAGS_sp_size > 1 && parallel_args_.dit_sp_group_ != nullptr);
+
+    // runtime params
+    ctx.true_cfg_scale = generation_params.true_cfg_scale;
+    ctx.infer_steps = num_inference_steps;
+    ctx.num_blocks = num_layers_;
+
+    // write runtime context into global cache
+    DiTCache::get_instance().set_runtime_context(ctx);
+
     scheduler_->set_begin_index(0);
     for (int64_t i = 0; i < timesteps.size(0); ++i) {
       auto t = timesteps[i];
@@ -493,7 +523,7 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
                                              main_shape,
                                              txt_seq_lens,
                                              /*use_cfg=*/false,
-                                             /*step_index=*/i);
+                                             /*step_index=*/i + 1);
           noise_pred = noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =
               xllm::parallel_state::gather(noise_pred,
@@ -507,7 +537,7 @@ class QwenImageEditPlusPipelineImpl : public QwenImagePipelineBaseImpl {
                                                  main_shape,
                                                  negative_txt_seq_lens,
                                                  /*use_cfg=*/true,
-                                                 /*step_index=*/i);
+                                                 /*step_index=*/i + 1);
 
           neg_noise_pred = neg_noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =
