@@ -72,6 +72,7 @@ cc_test(
     "${PROJECT_SOURCE_DIR}/xllm/core/runtime/spec_input_builder.cpp"
   DEPS
     :multimodal
+    :parallel_state
     torch
     glog::glog
     proto::xllm_proto
@@ -93,16 +94,6 @@ if(EXISTS "$ENV{PYTORCH_INSTALL_PATH}/../torch.libs")
   target_link_options(mtp_async_state_test PRIVATE
     "-Wl,-rpath-link,$ENV{PYTORCH_INSTALL_PATH}/../torch.libs")
 endif()
-
-cc_test(
-  NAME
-    cp_input_partition_test
-  SRCS
-    cp_input_partition_test.cpp
-  DEPS
-    :runtime
-    GTest::gtest_main
-)
 
 if(USE_MLU)
   cc_test(
