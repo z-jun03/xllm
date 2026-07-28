@@ -79,7 +79,8 @@ class DeepseekV32ModelImpl : public DeepseekV2ModelImpl {
     auto& attn_metadata = *modified_input_params.attn_metadata;
     std::optional<layer::v32_cp::DeepseekV32CPContext> cp_ctx;
     const bool use_model_sharding =
-        cp_size_ > 1 && Platform::uses_model_cp_sharding();
+        cp_size_ > 1 && Platform::uses_model_cp_sharding() &&
+        input_params.meta.batch_forward_type.no_decode();
     if (use_model_sharding) {
       if (cp_group_ == nullptr) {
         CHECK_EQ(parallel_world_size_, 1)
@@ -110,23 +111,14 @@ class DeepseekV32ModelImpl : public DeepseekV2ModelImpl {
     torch::Tensor positions_local =
         layer::v32_cp::reorder_to_local_shard(positions, cp_ctx.value());
     std::optional<torch::Tensor> residual;
-    for (size_t i = 0; i < layers_ref().size(); ++i) {
-#if defined(USE_CUDA) || defined(USE_MUSA)
-      attn_metadata.plan_info->layer_id = i;
-#endif
-      auto& layer = layers_ref()[i];
-      prepare_decoder_layer_for_forward(i, layer, attn_metadata);
-      hidden_states = layer(hidden_states,
+    if (!run_decoder_layers(hidden_states,
                             residual,
                             positions_local,
                             attn_metadata,
-                            kv_caches[i],
-                            modified_input_params);
-      if (!modified_input_params.record_layer(static_cast<uint32_t>(i),
-                                              hidden_states.device())) {
-        active_cp_context_ = nullptr;
-        return ModelOutput();
-      }
+                            kv_caches,
+                            modified_input_params)) {
+      active_cp_context_ = nullptr;
+      return ModelOutput();
     }
     hidden_states =
         layer::v32_cp::gather_and_restore_global(hidden_states, cp_ctx.value());
