@@ -842,8 +842,8 @@ class QwenImageEditPlusPipelineImpl : public torch::nn::Module {
     auto width = generation_params.width;
     auto true_cfg_scale = generation_params.true_cfg_scale;
     auto num_inference_steps = generation_params.num_inference_steps;
-    DiTCache::get_instance().set_infer_steps(num_inference_steps);
-    DiTCache::get_instance().set_num_blocks(num_layers_);
+    DiTCache::get_instance().set_context(
+        {/*infer_steps=*/num_inference_steps, /*num_blocks=*/num_layers_});
     auto max_sequence_length = generation_params.max_sequence_length;
     auto seed = generation_params.seed >= 0 ? generation_params.seed : 42;
 
@@ -1082,7 +1082,7 @@ class QwenImageEditPlusPipelineImpl : public torch::nn::Module {
                                              txt_seq_lens,
                                              image_rotary_emb_pos,
                                              /*use_cfg=*/false,
-                                             /*step_index=*/i);
+                                             /*step_index=*/i + 1);
           noise_pred = noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =
               xllm::parallel_state::gather(noise_pred,
@@ -1097,7 +1097,7 @@ class QwenImageEditPlusPipelineImpl : public torch::nn::Module {
                                                  negative_txt_seq_lens,
                                                  image_rotary_emb_neg,
                                                  /*use_cfg=*/true,
-                                                 /*step_index=*/i);
+                                                 /*step_index=*/i + 1);
 
           neg_noise_pred = neg_noise_pred.slice(1, 0, final_latents.size(1));
           pos_neg_noise_preds =
@@ -1121,7 +1121,7 @@ class QwenImageEditPlusPipelineImpl : public torch::nn::Module {
                                            txt_seq_lens,
                                            image_rotary_emb_pos,
                                            /*use_cfg=*/false,
-                                           /*step_index=*/i);
+                                           /*step_index=*/i + 1);
         noise_pred = noise_pred.slice(1, 0, final_latents.size(1));
         if (do_true_cfg) {
           neg_noise_pred = transformer_->forward(latent_model_input,
@@ -1132,7 +1132,7 @@ class QwenImageEditPlusPipelineImpl : public torch::nn::Module {
                                                  negative_txt_seq_lens,
                                                  image_rotary_emb_neg,
                                                  /*use_cfg=*/true,
-                                                 /*step_index=*/i);
+                                                 /*step_index=*/i + 1);
 
           neg_noise_pred = neg_noise_pred.slice(1, 0, final_latents.size(1));
 
