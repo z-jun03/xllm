@@ -12,4 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Attention backend interfaces and implementations."""
+"""CUDA weight preparation for linear layers."""
+
+from __future__ import annotations
+
+import torch
+
+
+def prepare_row_parallel_weight(
+    weight: torch.Tensor,
+) -> tuple[torch.Tensor, bool]:
+    """Lay out a row-parallel weight for the CUDA matmul kernels.
+
+    CUDA consumes the checkpoint layout ``[N, K]`` directly, so the weight is
+    returned untouched.
+
+    Args:
+        weight: Row-parallel weight of shape ``[N, K]``.
+
+    Returns:
+        The weight and whether it was transposed to ``[K, N]``.
+    """
+    return weight, False
+
+
+__all__ = ["prepare_row_parallel_weight"]
