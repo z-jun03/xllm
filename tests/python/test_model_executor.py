@@ -126,7 +126,10 @@ class _FakeModelNoAttention(nn.Module):
 
 
 class TestNpuGraphBackendResolution:
-    @patch("xllm.python.model_executor.executor.platform.is_npu", return_value=True)
+    @patch(
+        "xllm.python.model_executor.executor.current_platform.is_npu",
+        return_value=True,
+    )
     def test_enable_graph_selects_aclgraph_on_npu(self, _mock_is_npu):
         config = {"enable_graph": True, "python_graph_backend": "off"}
         assert _resolve_graph_backend(config) == "aclgraph"
@@ -139,7 +142,8 @@ class TestNpuGraphBackendResolution:
 
 class TestCreateAttentionBackend:
     @patch(
-        "xllm.python.model_executor.executor.platform.is_npu", return_value=True
+        "xllm.python.model_executor.executor.current_platform.is_npu",
+        return_value=True,
     )
     @patch(
         "xllm.python.attention.npu_paged_attention.NpuPagedAttentionBackend",
@@ -155,10 +159,16 @@ class TestCreateAttentionBackend:
         assert backend.init_kwargs["num_kv_heads"] == 2
         assert backend.init_kwargs["head_dim"] == 64
 
-    @patch("xllm.python.model_executor.executor.platform.is_npu", return_value=False)
-    @patch("xllm.python.model_executor.executor.platform.is_gpu", return_value=True)
+    @patch(
+        "xllm.python.model_executor.executor.current_platform.is_npu",
+        return_value=False,
+    )
+    @patch(
+        "xllm.python.model_executor.executor.current_platform.is_cuda",
+        return_value=True,
+    )
     def test_cuda_device_creates_flashinfer_backend(
-        self, _mock_is_gpu, _mock_is_npu
+        self, _mock_is_cuda, _mock_is_npu
     ):
         attn = _make_attention_layer()
         module = types.ModuleType("xllm.python.attention.flashinfer")

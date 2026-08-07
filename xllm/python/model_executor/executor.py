@@ -21,14 +21,14 @@ from xllm.python.attention.backend import AttentionBackend, AttentionMetadata, K
 from xllm.python.layers.attention import Attention
 from xllm.python.model_executor.forward_context import LayerSynchronizer
 from xllm.python.model_executor.runners.eager import EagerRunner
-from xllm.python import platform
+from xllm.python.platform import current_platform
 
 
 def _resolve_graph_backend(config: dict) -> str:
     graph_backend = str(config.get("python_graph_backend", "off")).lower()
     graph_disabled = graph_backend in ("", "off", "none", "0")
     if graph_disabled and config.get("enable_graph", False):
-        if platform.is_npu():
+        if current_platform.is_npu():
             return "aclgraph"
     return graph_backend
 
@@ -38,7 +38,7 @@ def _create_attention_backend(
     device: torch.device,
     dtype: torch.dtype,
 ) -> AttentionBackend:
-    if platform.is_npu():
+    if current_platform.is_npu():
         from xllm.python.attention.npu_paged_attention import (
             NpuPagedAttentionBackend,
         )
@@ -51,7 +51,7 @@ def _create_attention_backend(
             device=device,
             dtype=dtype,
         )
-    if platform.is_gpu():
+    if current_platform.is_cuda():
         from xllm.python.attention.flashinfer import FlashInferBackend
         return FlashInferBackend(
             num_heads=first_attention.num_heads,
