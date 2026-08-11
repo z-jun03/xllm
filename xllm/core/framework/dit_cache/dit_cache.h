@@ -14,7 +14,12 @@ limitations under the License.
 ==============================================================================*/
 
 #pragma once
+
+#include <memory>
+#include <utility>
+
 #include "dit_cache_impl.h"
+#include "regione.h"
 
 namespace xllm {
 
@@ -35,41 +40,36 @@ class DiTCache {
 
   bool init(const DiTCacheConfig& cfg);
 
-  DiTCache(const DiTCacheConfig& cfg) {
-    active_cache_ = create_dit_cache(cfg);
-    active_cond_cache_ = create_dit_cache(cfg);
-    if (!active_cache_ || !active_cond_cache_) {
-      LOG(ERROR) << "failed to initialized dit cache, "
-                    "please check your config";
-    }
-    active_cache_->init(cfg);
-    active_cond_cache_->init(cfg);
-  }
+  explicit DiTCache(const DiTCacheConfig& cfg) { init(cfg); }
 
   bool on_before_block(const CacheBlockIn& blockin, bool use_cfg = false);
-
   CacheBlockOut on_after_block(const CacheBlockIn& blockin,
                                bool use_cfg = false);
-
   bool on_before_step(const CacheStepIn& stepin, bool use_cfg = false);
-
   CacheStepOut on_after_step(const CacheStepIn& stepin, bool use_cfg = false);
 
   virtual void set_infer_steps(const int64_t& infer_steps) {
+    if (regione_cache_) regione_cache_->set_infer_steps(infer_steps);
     active_cache_->set_infer_steps(infer_steps);
     active_cond_cache_->set_infer_steps(infer_steps);
   }
 
   virtual void set_num_blocks(const int64_t& num_blocks) {
+    if (regione_cache_) regione_cache_->set_num_blocks(num_blocks);
     active_cache_->set_num_blocks(num_blocks);
     active_cond_cache_->set_num_blocks(num_blocks);
   }
 
+  RegionECache* regione() { return regione_cache_.get(); }
+  const RegionECache* regione() const { return regione_cache_.get(); }
+
  private:
-  torch::Tensor get_tensor_or_empty(const TensorMap& m, const std::string& k);
+  static torch::Tensor get_tensor_or_empty(const TensorMap& m,
+                                           const std::string& k);
 
   std::unique_ptr<DitCacheImpl> active_cache_;
   std::unique_ptr<DitCacheImpl> active_cond_cache_;
+  std::unique_ptr<RegionECache> regione_cache_;
 };
 
 }  // namespace xllm

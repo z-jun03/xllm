@@ -21,8 +21,11 @@ limitations under the License.
 #include <glog/logging.h>
 #include <torch/torch.h>
 
+#include <algorithm>
+#include <exception>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <utility>
 
 #include "common/device_monitor.h"
@@ -42,6 +45,30 @@ limitations under the License.
 namespace xllm {
 
 namespace {
+std::vector<int64_t> parse_regione_refresh_steps(const std::string& text) {
+  std::vector<int64_t> steps;
+  std::stringstream ss(text);
+  std::string item;
+  while (std::getline(ss, item, ',')) {
+    if (item.empty()) {
+      continue;
+    }
+    try {
+      const int64_t step = std::stoll(item);
+      CHECK_GT(step, 0) << "RegionE refresh steps must be positive: " << item;
+      steps.emplace_back(step);
+    } catch (const std::exception& error) {
+      LOG(FATAL) << "Invalid RegionE refresh step '" << item
+                 << "': " << error.what();
+    }
+  }
+  CHECK(!steps.empty()) << "RegionE requires at least one refresh step";
+  std::sort(steps.begin(), steps.end());
+  const auto duplicate = std::adjacent_find(steps.begin(), steps.end());
+  CHECK(duplicate == steps.end()) << "RegionE refresh steps must be unique";
+  return steps;
+}
+
 DiTCacheConfig parse_dit_cache_from_flags() {
   DiTCacheConfig cache_config;
   if (::xllm::DiTConfig::get_instance().dit_cache_policy() == "FBCache") {
@@ -81,6 +108,25 @@ DiTCacheConfig parse_dit_cache_from_flags() {
         ::xllm::DiTConfig::get_instance().dit_cache_end_blocks();
     cache_config.residual_cache.skip_interval_steps =
         ::xllm::DiTConfig::get_instance().dit_cache_skip_interval_steps();
+  } else if (::xllm::DiTConfig::get_instance().dit_cache_policy() ==
+             "RegionE") {
+    cache_config.selected_policy = PolicyType::RegionE;
+    cache_config.regione.warmup_steps =
+        ::xllm::DiTConfig::get_instance().dit_regione_warmup_steps();
+    cache_config.regione.tail_steps =
+        ::xllm::DiTConfig::get_instance().dit_regione_tail_steps();
+    cache_config.regione.refresh_steps = parse_regione_refresh_steps(
+        ::xllm::DiTConfig::get_instance().dit_regione_refresh_steps());
+    cache_config.regione.region_threshold =
+        ::xllm::DiTConfig::get_instance().dit_regione_region_threshold();
+    cache_config.regione.velocity_cache_threshold =
+        ::xllm::DiTConfig::get_instance()
+            .dit_regione_velocity_cache_threshold();
+    cache_config.regione.velocity_cache_n_derivatives =
+        ::xllm::DiTConfig::get_instance()
+            .dit_regione_velocity_cache_n_derivatives();
+    cache_config.regione.enable_velocity_cache =
+        ::xllm::DiTConfig::get_instance().dit_regione_enable_velocity_cache();
   } else if (::xllm::DiTConfig::get_instance().dit_cache_policy() == "None") {
     cache_config.selected_policy = PolicyType::None;
   }

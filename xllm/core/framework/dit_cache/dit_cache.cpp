@@ -18,6 +18,12 @@ limitations under the License.
 namespace xllm {
 
 bool DiTCache::init(const DiTCacheConfig& cfg) {
+  regione_cache_.reset();
+  if (cfg.selected_policy == PolicyType::RegionE) {
+    regione_cache_ = std::make_unique<RegionECache>();
+    regione_cache_->init(cfg);
+  }
+
   active_cache_ = create_dit_cache(cfg);
   active_cond_cache_ = create_dit_cache(cfg);
   if (!active_cache_ || !active_cond_cache_) {
