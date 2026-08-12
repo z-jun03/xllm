@@ -121,6 +121,16 @@ LLMEngine::LLMEngine(const runtime::Options& options,
       /*pool_name=*/"LLMEngine.forward_input");
 }
 
+runtime::DecodeGraphExecutionShape LLMEngine::decode_graph_execution_shape()
+    const {
+  runtime::DecodeGraphExecutionShape execution_shape;
+  execution_shape.num_decoding_tokens = options_.num_decoding_tokens();
+  execution_shape.num_speculative_tokens = options_.num_speculative_tokens();
+  execution_shape.enable_graph_mode_decode_no_padding =
+      options_.enable_graph_mode_decode_no_padding();
+  return execution_shape;
+}
+
 void LLMEngine::process_group_test() {
 #if !defined(USE_NPU)
   // In multi-node serving mode, only driver engine

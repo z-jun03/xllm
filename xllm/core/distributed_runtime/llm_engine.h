@@ -57,6 +57,9 @@ class LLMEngine : public Engine {
 
   const runtime::Options& options() const { return options_; }
 
+  runtime::DecodeGraphExecutionShape decode_graph_execution_shape()
+      const override;
+
   bool init(MasterStatus master_status) override;
 
   bool set_speculative_validate_time_predictor(
