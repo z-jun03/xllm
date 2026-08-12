@@ -42,8 +42,10 @@ from xllm.python.layers import (
 from xllm.python.model_executor.forward_context import (
     ForwardContext,
     forward_context,
+    get_forward_context,
     record_layer_event,
 )  # noqa: F401
+from xllm.python.model_executor.cp_utils import cp_merge_rows, cp_shard_positions, cp_shard_rows
 from xllm.python.models.base import PyModelBase
 
 
@@ -317,6 +319,13 @@ class Qwen3Model(nn.Module):
         # (its output lives in the graph memory pool), so replay re-casts the
         # updated static_positions correctly.
         positions = positions.to(torch.int64).contiguous()
+        # Context-Parallel: shard the sequence across the CP group after embed
+        # and merge back before the final norm (model-side CP semantics). Only
+        # active on prefill with cp_size>1; cp_context is None otherwise.
+        cp_context = get_forward_context().cp_context
+        if cp_context is not None:
+            hidden = cp_shard_rows(hidden, cp_context)
+            positions = cp_shard_positions(positions, cp_context).contiguous()
         residual: Optional[torch.Tensor] = None
         for i, layer in enumerate(self.layers):
             hidden, residual = layer(
@@ -330,6 +339,8 @@ class Qwen3Model(nn.Module):
             )
             record_layer_event(i)
         hidden, _ = self.norm(hidden, residual)
+        if cp_context is not None:
+            hidden = cp_merge_rows(hidden, cp_context)
         return hidden
 
 
