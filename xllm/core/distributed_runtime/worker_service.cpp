@@ -29,6 +29,7 @@ limitations under the License.
 #include "common/types.h"
 #include "core/distributed_runtime/comm_channel.h"
 #include "core/framework/config/eplb_config.h"
+#include "core/framework/config/speculative_config.h"
 #include "framework/kv_cache/kv_cache_shape.h"
 #include "framework/model/model_input_params.h"
 #include "framework/request/sequence.h"
@@ -78,14 +79,28 @@ void record_speculative_metrics_from_output(const torch::Tensor& next_tokens,
       next_tokens.dim() != 2 || next_tokens.numel() == 0) {
     return;
   }
+  // DFlash / DSpark record metrics inline in their own worker
+  // (DFlashWorkerImpl::record_validate_metrics) with precise per-seq
+  // widths, so this generic per-tensor count would double-count them.
+  if (SpeculativeConfig::is_block_diffusion_algorithm(
+          options.speculative_algorithm())) {
+    return;
+  }
 
   const int64_t batch_size = next_tokens.size(0);
   const int64_t token_width = next_tokens.size(1);
   const int64_t num_speculative_tokens = options.num_speculative_tokens();
-  if (num_speculative_tokens <= 0 ||
-      token_width != num_speculative_tokens + 1) {
+  if (num_speculative_tokens <= 0 || token_width < 2) {
     return;
   }
+  // For MTP the check was strict `token_width == num_speculative_tokens + 1`;
+  // DFlash / DSpark adaptive pruning may hand back a narrower validate block
+  // (effective_val_tokens < N+1), so accept any width in [2, N+1] and derive
+  // the actual draft count from `token_width - 1`.
+  if (token_width > num_speculative_tokens + 1) {
+    return;
+  }
+  const int64_t effective_speculative_tokens = token_width - 1;
 
   torch::Tensor tokens = next_tokens.contiguous();
   int64_t rejected_count = 0;
@@ -108,7 +123,7 @@ void record_speculative_metrics_from_output(const torch::Tensor& next_tokens,
       return;
   }
 
-  const int64_t num_draft_tokens = batch_size * num_speculative_tokens;
+  const int64_t num_draft_tokens = batch_size * effective_speculative_tokens;
   rejected_count = std::min(rejected_count, num_draft_tokens);
   COUNTER_ADD(speculative_num_draft_tokens_total, num_draft_tokens);
   COUNTER_ADD(speculative_num_accepted_tokens_total,
