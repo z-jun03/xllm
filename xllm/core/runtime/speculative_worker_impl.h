@@ -15,6 +15,7 @@ limitations under the License.
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -29,6 +30,19 @@ namespace xllm {
 // Returns whether this rank may execute the multi-step speculative decode
 // plan for the current global DP batch.
 bool should_run_speculative_decode(const ModelInputParams& params);
+
+// Keep padded and raw DP token-count views in the same speculative layout.
+void scale_speculative_parallel_token_counts(ModelInputParams& params,
+                                             int32_t multiplier);
+
+struct SpeculativeOutputStats {
+  std::vector<int64_t> accepted_per_position;
+  int64_t committed_tokens = 0;
+};
+
+SpeculativeOutputStats calculate_speculative_output_stats(
+    const torch::Tensor& tokens,
+    int64_t num_speculative_tokens);
 
 // Base class for all speculative decoding workers.
 // Provides common logic: target model management, step dispatch, and
@@ -144,6 +158,13 @@ class SpeculativeWorkerImpl : public WorkerImpl {
   void prepare_validate_inputs(const ForwardInput& inputs,
                                ForwardInput& validate_inputs,
                                const std::vector<int32_t>& per_seq_val_tokens);
+
+  // Target-side cache budget after reserving storage for a colocated draft.
+  // DeepSeek-V4's fixed SWA pools require both geometries to participate.
+  std::tuple<int64_t, int64_t> estimate_kv_cache_capacity_with_draft(
+      LLMWorkerImpl& draft_impl,
+      const runtime::Options& target_options,
+      const runtime::Options& draft_options);
 
  protected:
   // Target model worker

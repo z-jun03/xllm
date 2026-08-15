@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
+#include <string>
 #include <vector>
 
 #include "common/device_monitor.h"
@@ -36,6 +37,7 @@ limitations under the License.
 #include "framework/sampling/sampling_params.h"
 #include "runtime/forward_params.h"
 #include "runtime/params_utils.h"
+#include "runtime/speculative_worker_impl.h"
 #include "util/timer.h"
 
 namespace xllm {
@@ -60,76 +62,6 @@ int32_t get_num_decode_seqs_for_schedule_overlap(const ForwardInput& input) {
       unpacked_input.sampling_params.sample_idxes.size(0));
 }
 
-template <typename T>
-int64_t count_negative_tokens(const torch::Tensor& tokens) {
-  const T* data = tokens.const_data_ptr<T>();
-  const int64_t numel = tokens.numel();
-  int64_t count = 0;
-  for (int64_t i = 0; i < numel; ++i) {
-    if (data[i] < static_cast<T>(0)) {
-      ++count;
-    }
-  }
-  return count;
-}
-
-void record_speculative_metrics_from_output(const torch::Tensor& next_tokens,
-                                            const runtime::Options& options) {
-  if (!options.enable_speculative_decode() || !next_tokens.defined() ||
-      next_tokens.dim() != 2 || next_tokens.numel() == 0) {
-    return;
-  }
-  // DFlash / DSpark record metrics inline in their own worker
-  // (DFlashWorkerImpl::record_validate_metrics) with precise per-seq
-  // widths, so this generic per-tensor count would double-count them.
-  if (SpeculativeConfig::is_block_diffusion_algorithm(
-          options.speculative_algorithm())) {
-    return;
-  }
-
-  const int64_t batch_size = next_tokens.size(0);
-  const int64_t token_width = next_tokens.size(1);
-  const int64_t num_speculative_tokens = options.num_speculative_tokens();
-  if (num_speculative_tokens <= 0 || token_width < 2) {
-    return;
-  }
-  // For MTP the check was strict `token_width == num_speculative_tokens + 1`;
-  // DFlash / DSpark adaptive pruning may hand back a narrower validate block
-  // (effective_val_tokens < N+1), so accept any width in [2, N+1] and derive
-  // the actual draft count from `token_width - 1`.
-  if (token_width > num_speculative_tokens + 1) {
-    return;
-  }
-  const int64_t effective_speculative_tokens = token_width - 1;
-
-  torch::Tensor tokens = next_tokens.contiguous();
-  int64_t rejected_count = 0;
-  switch (tokens.scalar_type()) {
-    case torch::kInt64:
-      rejected_count = count_negative_tokens<int64_t>(tokens);
-      break;
-    case torch::kInt32:
-      rejected_count = count_negative_tokens<int32_t>(tokens);
-      break;
-    case torch::kInt16:
-      rejected_count = count_negative_tokens<int16_t>(tokens);
-      break;
-    case torch::kInt8:
-      rejected_count = count_negative_tokens<int8_t>(tokens);
-      break;
-    default:
-      LOG(WARNING) << "Unsupported speculative next_tokens dtype for metrics: "
-                   << tokens.scalar_type();
-      return;
-  }
-
-  const int64_t num_draft_tokens = batch_size * effective_speculative_tokens;
-  rejected_count = std::min(rejected_count, num_draft_tokens);
-  COUNTER_ADD(speculative_num_draft_tokens_total, num_draft_tokens);
-  COUNTER_ADD(speculative_num_accepted_tokens_total,
-              num_draft_tokens - rejected_count);
-}
-
 torch::Tensor clone_cpu_tensor_view(const torch::Tensor& tensor) {
   if (!tensor.defined()) {
     return tensor;
@@ -145,11 +77,30 @@ void stabilize_schedule_overlap_host_views(ForwardInput& input) {
       clone_cpu_tensor_view(input.input_params.attention.host.block_tables);
 }
 
+// Preformatted position tags for MULTI_COUNTER_ADD so the metrics loop does
+// not allocate a fresh std::string per step per position.
+std::vector<std::string> build_speculative_position_labels(
+    const runtime::Options& options) {
+  const int32_t num_speculative_tokens = options.num_speculative_tokens();
+  if (num_speculative_tokens <= 0) {
+    return {};
+  }
+  std::vector<std::string> labels;
+  labels.reserve(static_cast<size_t>(num_speculative_tokens));
+  for (int32_t position = 0; position < num_speculative_tokens; ++position) {
+    labels.emplace_back(std::to_string(position));
+  }
+  return labels;
+}
+
 }  // namespace
 
 WorkerService::WorkerService(runtime::Options options,
                              const torch::Device& device)
-    : options_(options), device_(device), initialized_(false) {
+    : options_(options),
+      speculative_position_labels_(build_speculative_position_labels(options)),
+      initialized_(false),
+      device_(device) {
   device_.set_device();
   device_.init_device_context();
   stream_ = device_.get_stream_from_pool();
@@ -164,9 +115,10 @@ WorkerService::WorkerService(runtime::Options options,
                              const torch::Device& device,
                              std::unique_ptr<Worker> worker)
     : options_(options),
+      speculative_position_labels_(build_speculative_position_labels(options)),
+      initialized_(true),
       device_(device),
-      worker_(std::move(worker)),
-      initialized_(true) {
+      worker_(std::move(worker)) {
   device_.set_device();
   device_.init_device_context();
   stream_ = device_.get_stream_from_pool();
@@ -178,6 +130,62 @@ WorkerService::WorkerService(runtime::Options options,
 }
 
 WorkerService::~WorkerService() = default;
+
+void WorkerService::record_speculative_metrics_from_output(
+    const torch::Tensor& next_tokens) {
+  if (!options_.enable_speculative_decode() || !next_tokens.defined() ||
+      next_tokens.dim() != 2 || next_tokens.numel() == 0) {
+    return;
+  }
+  // DFlash / DSpark record metrics inline in their own worker
+  // (DFlashWorkerImpl::record_validate_metrics) with precise per-seq widths,
+  // so this generic per-tensor count would double-count them.
+  if (SpeculativeConfig::is_block_diffusion_algorithm(
+          options_.speculative_algorithm())) {
+    return;
+  }
+
+  const int64_t batch_size = next_tokens.size(0);
+  const int64_t token_width = next_tokens.size(1);
+  const int64_t num_speculative_tokens = options_.num_speculative_tokens();
+  if (num_speculative_tokens <= 0 || token_width < 2) {
+    return;
+  }
+  // Adaptive pruning may hand back a narrower validate block, so accept any
+  // width in [2, N+1] and derive the actual draft count from token_width - 1.
+  if (token_width > num_speculative_tokens + 1) {
+    return;
+  }
+  const int64_t effective_speculative_tokens = token_width - 1;
+
+  SpeculativeOutputStats stats =
+      calculate_speculative_output_stats(next_tokens, num_speculative_tokens);
+
+  const int64_t num_draft_tokens = batch_size * effective_speculative_tokens;
+  int64_t num_accepted_tokens = 0;
+  for (int64_t position = 0; position < effective_speculative_tokens;
+       ++position) {
+    const int64_t accepted =
+        stats.accepted_per_position[static_cast<size_t>(position)];
+    num_accepted_tokens += accepted;
+    MULTI_COUNTER_ADD(
+        speculative_num_accepted_tokens_per_pos,
+        speculative_position_labels_[static_cast<size_t>(position)],
+        accepted);
+  }
+  COUNTER_ADD(speculative_num_drafts_total, batch_size);
+  COUNTER_ADD(speculative_num_draft_tokens_total, num_draft_tokens);
+  COUNTER_ADD(speculative_num_accepted_tokens_total, num_accepted_tokens);
+  COUNTER_ADD(speculative_num_committed_tokens_total, stats.committed_tokens);
+  // Derive from the global counters, not per-instance totals, so multi-DP
+  // writers converge on one aggregate instead of overwriting the gauge.
+  const double total_drafts = COUNTER_VALUE(speculative_num_drafts_total);
+  if (total_drafts > 0) {
+    GAUGE_SET(
+        speculative_mean_tokens_per_decode_step,
+        COUNTER_VALUE(speculative_num_committed_tokens_total) / total_drafts);
+  }
+}
 
 void WorkerService::set_worker(std::unique_ptr<Worker> worker) {
   worker_ = std::move(worker);
@@ -302,7 +310,7 @@ void WorkerService::step(ForwardInput& fwd_input,
         } else {
           stream_->synchronize();
         }
-        record_speculative_metrics_from_output(next_tokens, options_);
+        record_speculative_metrics_from_output(next_tokens);
       }
     }
   } else {
@@ -935,7 +943,7 @@ void WorkerService::GetLastStepResult(
                 device_.index());
 #endif
           }
-          record_speculative_metrics_from_output(next_tokens, options_);
+          record_speculative_metrics_from_output(next_tokens);
 
           if (next_tokens.defined() || !dit_images.empty() ||
               !dit_text_output.empty() ||
