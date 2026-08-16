@@ -58,9 +58,9 @@ struct FBCacheTaylorSeerOptions : public DiTBaseCacheOptions {
 
 struct RegionEOptions : public DiTBaseCacheOptions {
   int64_t tail_steps = 2;
-  std::vector<int64_t> refresh_steps = {16};
+  std::vector<int64_t> refresh_steps = {10, 16, 20};
   float region_threshold = 0.80f;
-  float velocity_cache_threshold = 0.03f;
+  float velocity_cache_threshold = 0.10f;
   int64_t velocity_cache_n_derivatives = 0;
   bool enable_velocity_cache = true;
 };

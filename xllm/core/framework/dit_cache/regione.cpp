@@ -31,7 +31,6 @@ limitations under the License.
 namespace xllm {
 namespace {
 constexpr int64_t kVelocityCacheReuseIntervalSteps = 3;
-
 double factorial(int64_t value) {
   return std::tgamma(static_cast<double>(value) + 1.0);
 }
@@ -66,6 +65,9 @@ void RegionECache::init(const DiTCacheConfig& cfg) {
   regione_enabled_ = cfg.selected_policy == PolicyType::RegionE;
   regione_velocity_cache_ = torch::Tensor();
   regione_partial_step_count_ = 0;
+  regione_velocity_cache_reuse_count_ = 0;
+  regione_full_step_count_ = 0;
+  regione_partial_step_count_total_ = 0;
   regione_current_block_ = -1;
   regione_current_use_cfg_ = false;
   regione_current_step_ = 0;
@@ -242,6 +244,9 @@ void RegionECache::regione_prepare_inference(
   regione_unedited_ids_ = torch::Tensor();
   regione_velocity_cache_ = torch::Tensor();
   regione_partial_step_count_ = 0;
+  regione_velocity_cache_reuse_count_ = 0;
+  regione_full_step_count_ = 0;
+  regione_partial_step_count_total_ = 0;
   regione_partial_mode_ = false;
   regione_local_edited_global_ids_ = torch::Tensor();
   regione_local_edited_cache_ids_ = torch::Tensor();
@@ -455,10 +460,11 @@ void RegionECache::regione_select_regions(const torch::Tensor& sample,
       selected_mask[0].to(torch::kCPU, torch::kBool).contiguous();
   auto edited_cpu = torch::nonzero(selected_mask_cpu).reshape({-1});
   if (edited_cpu.numel() == 0) {
-    edited_cpu = std::get<1>(similarity[0].min(0, false))
-                     .reshape({1})
-                     .to(torch::kCPU, torch::kLong);
+    const auto fallback_id =
+        std::get<1>(similarity[0].min(0, false)).reshape({1}).to(torch::kCPU);
+    selected_mask_cpu.index_fill_(0, fallback_id, true);
   }
+  edited_cpu = torch::nonzero(selected_mask_cpu).reshape({-1});
   auto unedited_cpu =
       torch::nonzero(torch::logical_not(selected_mask_cpu)).reshape({-1});
   auto edited = edited_cpu.to(sample.device(), torch::kLong);
@@ -535,6 +541,8 @@ void RegionECache::regione_reset_edited_velocity_taylor() {
   regione_prev_edited_velocity_derivatives_valid_.assign(derivative_count,
                                                          false);
   regione_edited_velocity_last_exact_step_ = -1;
+  regione_last_velocity_relative_change_ = 0.0f;
+  regione_velocity_change_known_ = false;
 }
 
 void RegionECache::regione_update_edited_velocity_taylor(
@@ -559,6 +567,19 @@ void RegionECache::regione_update_edited_velocity_taylor(
       regione_edited_velocity_derivatives_;
   regione_prev_edited_velocity_derivatives_valid_ =
       regione_edited_velocity_derivatives_valid_;
+
+  if (regione_prev_edited_velocity_derivatives_valid_.size() > 0 &&
+      regione_prev_edited_velocity_derivatives_valid_[0] &&
+      regione_prev_edited_velocity_derivatives_[0].defined() &&
+      regione_prev_edited_velocity_derivatives_[0].sizes().vec() ==
+          edited_value.sizes().vec()) {
+    auto previous_velocity = regione_prev_edited_velocity_derivatives_[0];
+    auto velocity_delta = edited_value - previous_velocity;
+    auto previous_mean = previous_velocity.abs().mean();
+    regione_last_velocity_relative_change_ =
+        (velocity_delta.abs().mean() / (previous_mean + 1e-6)).item<float>();
+    regione_velocity_change_known_ = true;
+  }
 
   std::vector<torch::Tensor> derivatives(derivative_count);
   std::vector<bool> derivatives_valid(derivative_count, false);
@@ -636,7 +657,13 @@ std::optional<float> RegionECache::regione_velocity_decay(
       regione_edited_velocity_last_exact_step_ < 0 ||
       regione_edited_velocity_derivatives_.empty() ||
       !regione_edited_velocity_derivatives_[0].defined() ||
+      !regione_velocity_change_known_ ||
       regione_partial_step_count_ % kVelocityCacheReuseIntervalSteps == 0) {
+    return std::nullopt;
+  }
+  if (step <= regione_edited_velocity_last_exact_step_) return std::nullopt;
+  if (regione_last_velocity_relative_change_ >
+      config_.regione.velocity_cache_threshold) {
     return std::nullopt;
   }
   return 1.0f;
@@ -658,6 +685,7 @@ RegionEStepPlan RegionECache::begin_step(
   regione_set_partial_mode(plan.partial_step);
   if (plan.full_step) {
     regione_partial_step_count_ = 0;
+    ++regione_full_step_count_;
   }
   if (plan.partial_step) {
     const auto decay =
@@ -667,6 +695,10 @@ RegionEStepPlan RegionECache::begin_step(
       plan.velocity_decay = *decay;
     }
     ++regione_partial_step_count_;
+    ++regione_partial_step_count_total_;
+    if (plan.use_velocity_cache) {
+      ++regione_velocity_cache_reuse_count_;
+    }
   }
   plan.run_partition = !regione_has_regions() &&
                        step == regione_warmup_steps() - 1 &&
@@ -677,6 +709,11 @@ RegionEStepPlan RegionECache::begin_step(
               << ", partial=" << plan.partial_step
               << ", velocity_cache=" << plan.use_velocity_cache
               << ", direct_unedited=" << plan.direct_unedited;
+    if (step + 1 == regione_infer_steps_) {
+      LOG(INFO) << "RegionE summary: full_steps=" << regione_full_step_count_
+                << ", partial_steps=" << regione_partial_step_count_total_
+                << ", velocity_reuse=" << regione_velocity_cache_reuse_count_;
+    }
   }
   return plan;
 }

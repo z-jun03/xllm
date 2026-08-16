@@ -98,13 +98,13 @@ class DiTConfig final {
 
   PROPERTY(int64_t, dit_regione_tail_steps) = 2;
 
-  PROPERTY(std::string, dit_regione_refresh_steps) = "16";
+  PROPERTY(std::string, dit_regione_refresh_steps) = "10,16,20";
 
   PROPERTY(int64_t, dit_regione_reference_image_index) = -1;
 
   PROPERTY(double, dit_regione_region_threshold) = 0.80;
 
-  PROPERTY(double, dit_regione_velocity_cache_threshold) = 0.03;
+  PROPERTY(double, dit_regione_velocity_cache_threshold) = 0.10;
 
   PROPERTY(int64_t, dit_regione_velocity_cache_n_derivatives) = 0;
 

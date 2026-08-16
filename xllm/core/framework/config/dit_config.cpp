@@ -62,7 +62,7 @@ DEFINE_int64(dit_regione_tail_steps,
              "RegionE: number of final full-image smoothing steps.");
 
 DEFINE_string(dit_regione_refresh_steps,
-              "16",
+              "10,16",
               "RegionE: comma-separated full-image refresh steps in RAGS.");
 
 DEFINE_int64(dit_regione_reference_image_index,
@@ -75,7 +75,7 @@ DEFINE_double(dit_regione_region_threshold,
               "RegionE: cosine threshold for adaptive region partition.");
 
 DEFINE_double(dit_regione_velocity_cache_threshold,
-              0.03,
+              0.10,
               "RegionE: maximum accumulated error for velocity cache reuse.");
 
 DEFINE_int64(dit_regione_velocity_cache_n_derivatives,

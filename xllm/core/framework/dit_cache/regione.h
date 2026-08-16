@@ -242,6 +242,11 @@ class RegionECache final {
   std::vector<bool> regione_edited_velocity_derivatives_valid_;
   std::vector<bool> regione_prev_edited_velocity_derivatives_valid_;
   int64_t regione_edited_velocity_last_exact_step_ = -1;
+  float regione_last_velocity_relative_change_ = 0.0f;
+  bool regione_velocity_change_known_ = false;
+  int64_t regione_velocity_cache_reuse_count_ = 0;
+  int64_t regione_full_step_count_ = 0;
+  int64_t regione_partial_step_count_total_ = 0;
   int64_t regione_partial_step_count_ = 0;
   std::vector<torch::Tensor> regione_k_cache_cpu_;
   std::vector<torch::Tensor> regione_v_cache_cpu_;
