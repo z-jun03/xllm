@@ -136,12 +136,12 @@ class SyncEvent(enum.IntEnum):
     # MTE3 -> MTE2 (per-buffer free signals)
     Q_FREE = 0
     G_FREE = 1
-    K_FREE = 9
-    V_FREE = 10
+    K_FREE = 2
+    V_FREE = 3
 
     # MTE2 -> MTE3
     GATE_READY = 3
-    V_READY = 8
+    V_READY = 4
 
 
 KERNEL_PASS_CONFIGS = {
