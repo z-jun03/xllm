@@ -304,9 +304,8 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     height = (height / vae_scale_factor_spatial_) * vae_scale_factor_spatial_;
     width = (width / vae_scale_factor_spatial_) * vae_scale_factor_spatial_;
 
-    // Reference images per sample, in two forms:
-    //  - vae_refs: VAE-preprocessed to [-1,1] (for latent encoding), each
-    //    bucket-resized to its own aspect bucket.
+    // Preprocess each reference image according to its aspect-ratio bucket
+    // before VAE encoding.
     std::vector<std::vector<torch::Tensor>> vae_refs(batch_size);
     for (int64_t b = 0; b < batch_size; ++b) {
       for (const auto& imgs : raw_images) {
@@ -314,8 +313,8 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
         int64_t ih = img.size(1), iw = img.size(2);
         auto hw = joyimage_bucket(ih, iw);
         auto img4 = img.unsqueeze(0).to(device_);
-        vae_refs[b].push_back(vae_image_processor_->preprocess(
-            img4, hw.first, hw.second, /*resize_mode=*/"lanczos"));
+        vae_refs[b].push_back(
+            preprocess_reference_image(img4, hw.first, hw.second));
       }
     }
     bool do_cfg = guidance_scale > 1.0;
@@ -873,6 +872,50 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
       }
     }
     return {best_h, best_w};
+  }
+
+  torch::Tensor preprocess_reference_image(const torch::Tensor& image,
+                                           int64_t target_h,
+                                           int64_t target_w) {
+    int64_t source_h = image.size(image.dim() - 2);
+    int64_t source_w = image.size(image.dim() - 1);
+    double scale = std::max(static_cast<double>(target_h) / source_h,
+                            static_cast<double>(target_w) / source_w);
+    int64_t resize_h = static_cast<int64_t>(std::ceil(source_h * scale));
+    int64_t resize_w = static_cast<int64_t>(std::ceil(source_w * scale));
+    torch::Tensor processed = resize_bilinear(image, resize_h, resize_w);
+    int64_t top = (resize_h - target_h) / 2;
+    int64_t left = (resize_w - target_w) / 2;
+    processed = processed.index({
+        torch::indexing::Slice(),
+        torch::indexing::Slice(),
+        torch::indexing::Slice(top, top + target_h),
+        torch::indexing::Slice(left, left + target_w)});
+    if (processed.max().item<float>() > 1.1f) {
+      processed = processed / 255.0f;
+    }
+    processed = 2.0f * processed - 1.0f;
+    return processed.to(device_, dtype_);
+  }
+
+  torch::Tensor resize_bilinear(const torch::Tensor& image,
+                                int64_t target_h,
+                                int64_t target_w) {
+    auto input = image.to(torch::kCPU).to(torch::kFloat32);
+    const bool squeeze_batch = input.dim() == 3;
+    if (squeeze_batch) {
+      input = input.unsqueeze(0);
+    }
+    CHECK_EQ(input.dim(), 4) << "Image resize expects CHW or BCHW input";
+    auto options = torch::nn::functional::InterpolateFuncOptions()
+                       .size(std::vector<int64_t>{target_h, target_w})
+                       .align_corners(false)
+                       .antialias(true)
+                       .mode(torch::kBilinear);
+    auto resized = torch::nn::functional::interpolate(input, options)
+                       .round()
+                       .clamp(0.0f, 255.0f);
+    return squeeze_batch ? resized.squeeze(0) : resized;
   }
 
   torch::Tensor pad_seq(const torch::Tensor& x, int64_t target_len) {
