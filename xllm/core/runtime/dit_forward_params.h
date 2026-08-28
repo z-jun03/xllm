@@ -183,12 +183,21 @@ struct DiTForwardInput {
       input.prompt_embeds = prompt_embeds.to(device, dtype);
     }
 
+    if (prompt_embeds_mask.defined()) {
+      input.prompt_embeds_mask = prompt_embeds_mask.to(device);
+    }
+
     if (pooled_prompt_embeds.defined()) {
       input.pooled_prompt_embeds = pooled_prompt_embeds.to(device, dtype);
     }
 
     if (negative_prompt_embeds.defined()) {
       input.negative_prompt_embeds = negative_prompt_embeds.to(device, dtype);
+    }
+
+    if (negative_prompt_embeds_mask.defined()) {
+      input.negative_prompt_embeds_mask =
+          negative_prompt_embeds_mask.to(device);
     }
 
     if (negative_pooled_prompt_embeds.defined()) {
@@ -256,9 +265,13 @@ struct DiTForwardInput {
 
   torch::Tensor prompt_embeds;
 
+  torch::Tensor prompt_embeds_mask;
+
   torch::Tensor pooled_prompt_embeds;
 
   torch::Tensor negative_prompt_embeds;
+
+  torch::Tensor negative_prompt_embeds_mask;
 
   torch::Tensor negative_pooled_prompt_embeds;
 

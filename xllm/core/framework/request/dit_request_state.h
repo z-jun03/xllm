@@ -154,9 +154,13 @@ struct DiTInputParams {
 
   torch::Tensor prompt_embed;
 
+  torch::Tensor prompt_embed_mask;
+
   torch::Tensor pooled_prompt_embed;
 
   torch::Tensor negative_prompt_embed;
+
+  torch::Tensor negative_prompt_embed_mask;
 
   torch::Tensor negative_pooled_prompt_embed;
 

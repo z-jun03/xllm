@@ -65,6 +65,12 @@ message Input {
   // multiple image
   repeated string images = 14;
 
+  // Attention mask for prompt embedding, with shape [batch_size, sequence_length]
+  optional Tensor prompt_embed_mask = 15;
+
+  // Attention mask for negative prompt embedding, with shape [batch_size, sequence_length]
+  optional Tensor negative_prompt_embed_mask = 16;
+
 }
 
 // Generation parameters container

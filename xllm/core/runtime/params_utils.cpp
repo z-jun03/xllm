@@ -539,6 +539,11 @@ bool proto_to_dit_forward_input(const proto::DiTForwardInput& pb_dit_inputs,
         util::proto_to_torch(pb_dit_inputs.prompt_embeds());
   }
 
+  if (pb_dit_inputs.has_prompt_embeds_mask()) {
+    dit_inputs.prompt_embeds_mask =
+        util::proto_to_torch(pb_dit_inputs.prompt_embeds_mask());
+  }
+
   if (pb_dit_inputs.has_pooled_prompt_embeds()) {
     dit_inputs.pooled_prompt_embeds =
         util::proto_to_torch(pb_dit_inputs.pooled_prompt_embeds());
@@ -547,6 +552,11 @@ bool proto_to_dit_forward_input(const proto::DiTForwardInput& pb_dit_inputs,
   if (pb_dit_inputs.has_negative_prompt_embeds()) {
     dit_inputs.negative_prompt_embeds =
         util::proto_to_torch(pb_dit_inputs.negative_prompt_embeds());
+  }
+
+  if (pb_dit_inputs.has_negative_prompt_embeds_mask()) {
+    dit_inputs.negative_prompt_embeds_mask =
+        util::proto_to_torch(pb_dit_inputs.negative_prompt_embeds_mask());
   }
 
   if (pb_dit_inputs.has_negative_pooled_prompt_embeds()) {

@@ -329,9 +329,16 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     }
     if (input.prompt_embeds.defined()) {
       prompt_embeds = input.prompt_embeds.to(options_.device(), dtype_);
-      prompt_embeds_mask = torch::ones(
-          {prompt_embeds.size(0), prompt_embeds.size(1)},
-          torch::TensorOptions().device(device_).dtype(torch::kLong));
+      if (input.prompt_embeds_mask.defined()) {
+        prompt_embeds_mask = input.prompt_embeds_mask.to(device_, torch::kLong);
+        CHECK_EQ(prompt_embeds_mask.dim(), 2);
+        CHECK_EQ(prompt_embeds_mask.size(0), prompt_embeds.size(0));
+        CHECK_EQ(prompt_embeds_mask.size(1), prompt_embeds.size(1));
+      } else {
+        prompt_embeds_mask = torch::ones(
+            {prompt_embeds.size(0), prompt_embeds.size(1)},
+            torch::TensorOptions().device(device_).dtype(torch::kLong));
+      }
     } else {
       CHECK(!input.prompts.empty())
           << "JoyImageEditPlus requires `prompts` or `prompt_embeds`";
@@ -343,9 +350,17 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     if (do_cfg) {
       if (input.negative_prompt_embeds.defined()) {
         neg_embeds = input.negative_prompt_embeds.to(options_.device(), dtype_);
-        neg_embeds_mask = torch::ones(
-            {neg_embeds.size(0), neg_embeds.size(1)},
-            torch::TensorOptions().device(device_).dtype(torch::kLong));
+        if (input.negative_prompt_embeds_mask.defined()) {
+          neg_embeds_mask =
+              input.negative_prompt_embeds_mask.to(device_, torch::kLong);
+          CHECK_EQ(neg_embeds_mask.dim(), 2);
+          CHECK_EQ(neg_embeds_mask.size(0), neg_embeds.size(0));
+          CHECK_EQ(neg_embeds_mask.size(1), neg_embeds.size(1));
+        } else {
+          neg_embeds_mask = torch::ones(
+              {neg_embeds.size(0), neg_embeds.size(1)},
+              torch::TensorOptions().device(device_).dtype(torch::kLong));
+        }
       } else {
         std::vector<std::string> negative_prompts = input.negative_prompts;
         if (negative_prompts.empty()) {

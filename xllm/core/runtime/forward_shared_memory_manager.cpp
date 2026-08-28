@@ -381,8 +381,10 @@ inline size_t get_dit_forward_input_size(const DiTForwardInput& input) {
   size += get_tensor_size(input.control_image);
   size += get_tensor_size(input.masked_image_latents);
   size += get_tensor_size(input.prompt_embeds);
+  size += get_tensor_size(input.prompt_embeds_mask);
   size += get_tensor_size(input.pooled_prompt_embeds);
   size += get_tensor_size(input.negative_prompt_embeds);
+  size += get_tensor_size(input.negative_prompt_embeds_mask);
   size += get_tensor_size(input.negative_pooled_prompt_embeds);
   size += get_tensor_size(input.latents);
   size += get_tensor_size(input.last_images);
@@ -1119,8 +1121,10 @@ inline void write_dit_forward_input(char*& buffer,
   write_tensor(buffer, input.control_image);
   write_tensor(buffer, input.masked_image_latents);
   write_tensor(buffer, input.prompt_embeds);
+  write_tensor(buffer, input.prompt_embeds_mask);
   write_tensor(buffer, input.pooled_prompt_embeds);
   write_tensor(buffer, input.negative_prompt_embeds);
+  write_tensor(buffer, input.negative_prompt_embeds_mask);
   write_tensor(buffer, input.negative_pooled_prompt_embeds);
   write_tensor(buffer, input.latents);
   write_tensor(buffer, input.last_images);
@@ -1145,8 +1149,10 @@ inline void write_dit_forward_input(RawInputSerializeContext& context,
   write_tensor(context, input.control_image);
   write_tensor(context, input.masked_image_latents);
   write_tensor(context, input.prompt_embeds);
+  write_tensor(context, input.prompt_embeds_mask);
   write_tensor(context, input.pooled_prompt_embeds);
   write_tensor(context, input.negative_prompt_embeds);
+  write_tensor(context, input.negative_prompt_embeds_mask);
   write_tensor(context, input.negative_pooled_prompt_embeds);
   write_tensor(context, input.latents);
   write_tensor(context, input.last_images);
@@ -2129,8 +2135,10 @@ inline void stabilize_dit_forward_input_tensors(DiTForwardInput& input) {
   clone_tensor_if_defined(input.control_image);
   clone_tensor_if_defined(input.masked_image_latents);
   clone_tensor_if_defined(input.prompt_embeds);
+  clone_tensor_if_defined(input.prompt_embeds_mask);
   clone_tensor_if_defined(input.pooled_prompt_embeds);
   clone_tensor_if_defined(input.negative_prompt_embeds);
+  clone_tensor_if_defined(input.negative_prompt_embeds_mask);
   clone_tensor_if_defined(input.negative_pooled_prompt_embeds);
   clone_tensor_if_defined(input.latents);
   clone_tensor_if_defined(input.last_images);
@@ -2153,8 +2161,10 @@ inline void read_dit_forward_input(const char*& buffer,
   read_tensor(buffer, input.control_image);
   read_tensor(buffer, input.masked_image_latents);
   read_tensor(buffer, input.prompt_embeds);
+  read_tensor(buffer, input.prompt_embeds_mask);
   read_tensor(buffer, input.pooled_prompt_embeds);
   read_tensor(buffer, input.negative_prompt_embeds);
+  read_tensor(buffer, input.negative_prompt_embeds_mask);
   read_tensor(buffer, input.negative_pooled_prompt_embeds);
   read_tensor(buffer, input.latents);
   read_tensor(buffer, input.last_images);
@@ -2202,11 +2212,19 @@ inline void read_dit_forward_input(ReadContext& context,
               /*stream=*/nullptr,
               /*force_host_materialize=*/true);
   read_tensor(context,
+              input.prompt_embeds_mask,
+              /*stream=*/nullptr,
+              /*force_host_materialize=*/true);
+  read_tensor(context,
               input.pooled_prompt_embeds,
               /*stream=*/nullptr,
               /*force_host_materialize=*/true);
   read_tensor(context,
               input.negative_prompt_embeds,
+              /*stream=*/nullptr,
+              /*force_host_materialize=*/true);
+  read_tensor(context,
+              input.negative_prompt_embeds_mask,
               /*stream=*/nullptr,
               /*force_host_materialize=*/true);
   read_tensor(context,

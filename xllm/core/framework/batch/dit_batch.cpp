@@ -66,9 +66,11 @@ DiTForwardInput DiTBatch::prepare_forward_input() {
   input.generation_params = request_vec_[0]->state().generation_params();
 
   std::vector<torch::Tensor> prompt_embeds;
+  std::vector<torch::Tensor> prompt_embeds_mask;
   std::vector<torch::Tensor> pooled_prompt_embeds;
 
   std::vector<torch::Tensor> negative_prompt_embeds;
+  std::vector<torch::Tensor> negative_prompt_embeds_mask;
   std::vector<torch::Tensor> negative_pooled_prompt_embeds;
 
   std::vector<torch::Tensor> images;
@@ -80,8 +82,10 @@ DiTForwardInput DiTBatch::prepare_forward_input() {
   std::vector<std::vector<torch::Tensor>> per_request_images;
   const auto batch_size = request_vec_.size();
   prompt_embeds.reserve(batch_size);
+  prompt_embeds_mask.reserve(batch_size);
   pooled_prompt_embeds.reserve(batch_size);
   negative_prompt_embeds.reserve(batch_size);
+  negative_prompt_embeds_mask.reserve(batch_size);
   negative_pooled_prompt_embeds.reserve(batch_size);
   images.reserve(batch_size);
   mask_images.reserve(batch_size);
@@ -114,9 +118,12 @@ DiTForwardInput DiTBatch::prepare_forward_input() {
       input.negative_prompts_2.emplace_back(input_params.negative_prompt_2);
 
     prompt_embeds.emplace_back(input_params.prompt_embed);
+    prompt_embeds_mask.emplace_back(input_params.prompt_embed_mask);
     pooled_prompt_embeds.emplace_back(input_params.pooled_prompt_embed);
 
     negative_prompt_embeds.emplace_back(input_params.negative_prompt_embed);
+    negative_prompt_embeds_mask.emplace_back(
+        input_params.negative_prompt_embed_mask);
     negative_pooled_prompt_embeds.emplace_back(
         input_params.negative_pooled_prompt_embed);
 
@@ -209,12 +216,21 @@ DiTForwardInput DiTBatch::prepare_forward_input() {
     input.prompt_embeds = torch::stack(prompt_embeds);
   }
 
+  if (check_tensors_valid(prompt_embeds_mask)) {
+    input.prompt_embeds_mask = torch::stack(prompt_embeds_mask);
+  }
+
   if (check_tensors_valid(pooled_prompt_embeds)) {
     input.pooled_prompt_embeds = torch::stack(pooled_prompt_embeds);
   }
 
   if (check_tensors_valid(negative_prompt_embeds)) {
     input.negative_prompt_embeds = torch::stack(negative_prompt_embeds);
+  }
+
+  if (check_tensors_valid(negative_prompt_embeds_mask)) {
+    input.negative_prompt_embeds_mask =
+        torch::stack(negative_prompt_embeds_mask);
   }
 
   if (check_tensors_valid(negative_pooled_prompt_embeds)) {

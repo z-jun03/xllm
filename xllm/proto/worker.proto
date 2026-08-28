@@ -305,6 +305,9 @@ message DiTForwardInput {
 
   Tensor last_images = 17;
 
+  Tensor prompt_embeds_mask = 21;
+  Tensor negative_prompt_embeds_mask = 22;
+
   // Voice cloning fields (LongCat-AudioDiT)
   optional Tensor prompt_audio = 19;
   optional string audio_prompt_text = 20;
