@@ -161,17 +161,14 @@ class WanCausalConv3DImpl : public torch::nn::Module,
         torch::nn::Conv3d(
             torch::nn::Conv3dOptions(in_channels, out_channels, kernel_size)
                 .stride(stride)
-                // Conv3d always gets 0 for temporal padding — causal temporal
-                // padding is handled separately via cache_x concatenation.
-                // padding_ layout: {temporal_pad, height_pad, width_pad}
-                .padding({0, padding[1], padding[2]})
+                // Match Diffusers: all padding is applied explicitly before
+                // Conv3d so the NPU uses the same convolution path.
+                .padding({0, 0, 0})
                 .bias(true)));
     // _padding_ is the 6-element format for F::pad:
-    //   {dim4_left, dim4_right, dim3_left, dim3_right, dim2_left, dim2_right}
-    // (dim4=W, dim3=H, dim2=T). Only the temporal (dim2) front padding is
-    // non-zero (2 * pad_t) for causal convolution; spatial padding is handled
-    // by Conv3d directly above.
-    _padding_ = {0, 0, 0, 0, 2 * padding[0], 0};
+    // {W_left, W_right, H_left, H_right, T_front, T_back}.
+    _padding_ = {
+        padding[2], padding[2], padding[1], padding[1], 2 * padding[0], 0};
   }
 
   torch::Tensor forward(
@@ -183,9 +180,11 @@ class WanCausalConv3DImpl : public torch::nn::Module,
     // Halo exchange is only needed for 3×3 spatial convolutions (kernel=3,
     // pad=1). For 1×1 convolutions (e.g. quant_conv) padding_ is {0,0,0}
     // so this condition is false and no exchange occurs.
-    // padding_ layout: {pad_temporal, pad_height, pad_width}
+    // padding_ layout: {pad_temporal, pad_height, pad_width}; _padding_
+    // stores the corresponding F::pad order.
     bool use_halo =
-        (vae_parallel_enabled() && padding_[1] == 1 && padding_[2] == 1);
+        (vae_parallel_enabled() && kernel_size_[1] == 3 &&
+         kernel_size_[2] == 3 && padding_[1] == 1 && padding_[2] == 1);
 
     // Temporal padding (causal) — must come BEFORE halo exchange so cache
     // and input have matching spatial dims.
@@ -198,6 +197,10 @@ class WanCausalConv3DImpl : public torch::nn::Module,
     // Spatial parallel: halo exchange for conv3d with spatial padding
     if (use_halo) {
       input = vae_parallel_exchange(input, /*pad=*/true);
+      // The halo exchange supplies the W boundary values. Keep only the
+      // H/T padding in F::pad to avoid padding the exchanged W halo twice.
+      padding[0] = 0;
+      padding[1] = 0;
     }
 
     input = torch::nn::functional::pad(
@@ -205,14 +208,8 @@ class WanCausalConv3DImpl : public torch::nn::Module,
 
     auto out = conv_->forward(input);
 
-    // Trim halo columns after conv:
-    //   exchange() added 1 column from left neighbor and 1 from right neighbor
-    //   (2 extra columns total). Conv3d with kernel=3, spatial pad=1 preserves
-    //   spatial size, so the output is 2 columns wider in W than the true local
-    //   result. Trim 1 column from each side (slice from column 1 to W-1).
-    if (use_halo) {
-      out = out.slice(/*dim=*/-1, 1, out.size(-1) - 1);
-    }
+    // With explicit W padding disabled, the two halo columns are consumed by
+    // the width-3 convolution and the output already has the local width.
     return out;
   }
 
