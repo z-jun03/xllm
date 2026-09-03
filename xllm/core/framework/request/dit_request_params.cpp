@@ -100,21 +100,17 @@ void fill_input_params(DiTInputParams& input_params, const InputProto& input) {
   if (input.has_prompt_embed()) {
     input_params.prompt_embed = util::proto_to_torch(input.prompt_embed());
   }
-  if constexpr (requires { input.has_prompt_embed_mask(); }) {
-    if (input.has_prompt_embed_mask()) {
-      input_params.prompt_embed_mask =
-          util::proto_to_torch(input.prompt_embed_mask());
-    }
+  if (input.has_prompt_embed_mask()) {
+    input_params.prompt_embed_mask =
+        util::proto_to_torch(input.prompt_embed_mask());
   }
   if (input.has_negative_prompt_embed()) {
     input_params.negative_prompt_embed =
         util::proto_to_torch(input.negative_prompt_embed());
   }
-  if constexpr (requires { input.has_negative_prompt_embed_mask(); }) {
-    if (input.has_negative_prompt_embed_mask()) {
-      input_params.negative_prompt_embed_mask =
-          util::proto_to_torch(input.negative_prompt_embed_mask());
-    }
+  if (input.has_negative_prompt_embed_mask()) {
+    input_params.negative_prompt_embed_mask =
+        util::proto_to_torch(input.negative_prompt_embed_mask());
   }
   if (input.has_image()) {
     decode_base64_image(input.image(), input_params.image);
