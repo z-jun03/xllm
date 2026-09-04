@@ -779,8 +779,8 @@ class JoyImageEditPlusTransformer3DModelImpl final
                         const torch::Tensor& rope_cos,
                         const torch::Tensor& rope_sin,
                         const torch::Tensor& attention_mask,
-                        bool use_cfg = false,
-                        int64_t step_index = 1) {
+                        bool use_cfg,
+                        int64_t step_index) {
     xllm::dit::SequenceParallelTensorMap model_outputs =
         sequence_parallel_forward(
             {{"hidden_states", {hidden_states, 1}},

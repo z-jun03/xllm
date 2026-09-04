@@ -197,12 +197,30 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     int64_t h_target = height / vae_scale_factor_spatial_;
     int64_t w_target = width / vae_scale_factor_spatial_;
 
+    if (provided_latents.defined()) {
+      CHECK(provided_latents.dim() == 4 || provided_latents.dim() == 5)
+          << "JoyImageEditPlus latent must have shape [B,C,H,W] or "
+             "[B,C,1,H,W], got "
+          << provided_latents.sizes();
+      CHECK_EQ(provided_latents.size(0), batch_size);
+      CHECK_EQ(provided_latents.size(1), num_channels_latents);
+      CHECK_EQ(provided_latents.size(-2), h_target);
+      CHECK_EQ(provided_latents.size(-1), w_target);
+      if (provided_latents.dim() == 5) {
+        CHECK_EQ(provided_latents.size(2), 1)
+            << "JoyImageEditPlus latent temporal size must be 1";
+      }
+    }
+
     for (int64_t b = 0; b < batch_size; ++b) {
       std::vector<torch::Tensor> items;
       // Target noise: [C, 1, h', w'].
       torch::Tensor noise;
       if (provided_latents.defined()) {
         noise = provided_latents[b].to(device_, dtype_);
+        if (noise.dim() == 3) {
+          noise = noise.unsqueeze(1);
+        }
       } else {
         noise = xllm::dit::randn_tensor(
             {num_channels_latents, 1, h_target, w_target}, seed + b, options_);
@@ -462,8 +480,8 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     // Decode target patches per sample.
     std::vector<torch::Tensor> images;
     for (int64_t b = 0; b < batch_size; ++b) {
-      auto thw = shape_list[b][0];
-      int64_t lt = thw[0], lh = thw[1], lw = thw[2];
+      auto target_shape = shape_list[b][0];
+      int64_t lt = target_shape[0], lh = target_shape[1], lw = target_shape[2];
       int64_t target_len = lt * lh * lw;
       auto patches = latents[b].slice(0, 0, target_len);  // [len, C, pt,ph,pw]
       int64_t c = patches.size(1);
