@@ -27,6 +27,8 @@ limitations under the License.
 #include <vector>
 
 #include "core/framework/config/kernel_config.h"
+#include "core/framework/config/load_config.h"
+#include "core/framework/config/parallel_config.h"
 #include "core/framework/dit_cache/dit_cache.h"
 #include "core/framework/dit_model_loader.h"
 #include "core/framework/kv_cache/kv_cache.h"
@@ -490,8 +492,19 @@ class JoyImageEditPlusPipelineImpl : public torch::nn::Module,
     vae_->load_model(std::move(vae_loader));
     vae_->to(options_.device(), dtype_);
 
-    transformer_->load_model(std::move(transformer_loader));
-    transformer_->to(options_.device(), dtype_);
+    bool use_rolling_load = false;
+#if defined(USE_NPU)
+    const bool sequence_parallel_enabled =
+        parallel_args_.dit_sp_group_ != nullptr &&
+        parallel_args_.dit_sp_group_->world_size() > 1;
+    use_rolling_load = LoadConfig::get_instance().enable_rolling_load() &&
+                       ParallelConfig::get_instance().tp_size() == 1 &&
+                       !sequence_parallel_enabled;
+#endif
+    transformer_->load_model(std::move(transformer_loader), use_rolling_load);
+    if (!use_rolling_load) {
+      transformer_->to(options_.device(), dtype_);
+    }
     transformer_->keep_fp32_modules();
 
     if (text_encoder_loader != nullptr) {

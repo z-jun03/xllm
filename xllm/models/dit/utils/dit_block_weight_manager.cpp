@@ -71,11 +71,12 @@ void BlockWeightLoader::build_from_module(torch::nn::Module& block) {
 
   size_t idx = 0;
   for (auto& kv : block.named_parameters(/*recurse=*/true)) {
-    if (idx >= params_.size()) {
-      break;
-    }
+    CHECK_LT(idx, params_.size());
     auto& param = kv.value();
     auto& info = params_[idx];
+    CHECK_EQ(kv.key(), info.name);
+    CHECK(param.sizes().vec() == info.sizes);
+    CHECK_EQ(param.scalar_type(), info.dtype);
 
     void* dst = static_cast<char*>(host_pinned_storage_) +
                 static_cast<ptrdiff_t>(info.host_offset);
@@ -85,6 +86,7 @@ void BlockWeightLoader::build_from_module(torch::nn::Module& block) {
 
     ++idx;
   }
+  CHECK_EQ(idx, params_.size());
 }
 
 void BlockWeightLoader::set_rolling_buffer(
@@ -118,12 +120,12 @@ void BlockWeightLoader::refresh_slot_views() {
 
   size_t idx = 0;
   for (auto& kv : params_[0].owner->named_parameters(/*recurse=*/true)) {
-    if (idx >= slot_tensors_.size()) {
-      break;
-    }
+    CHECK_LT(idx, slot_tensors_.size());
+    CHECK_EQ(kv.key(), params_[idx].name);
     kv.value().set_data(slot_tensors_[idx]);
     ++idx;
   }
+  CHECK_EQ(idx, slot_tensors_.size());
 }
 
 void BlockWeightLoader::copy_to_device_async(aclrtStream stream) {

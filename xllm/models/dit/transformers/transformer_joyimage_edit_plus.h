@@ -18,6 +18,7 @@ limitations under the License.
 #include <torch/torch.h>
 #if defined(USE_NPU)
 #include <torch_npu/csrc/aten/CustomFunctions.h>
+#include <torch_npu/csrc/core/npu/NPUCachingAllocator.h>
 #endif
 
 #include <cmath>
@@ -40,6 +41,10 @@ limitations under the License.
 #include "models/dit/transformers/transformer_qwen_image.h"
 #include "models/dit/utils/dit_parallel_mixin.h"
 #include "models/model_registry.h"
+#if defined(USE_NPU)
+#include "models/dit/utils/dit_block_weight_manager.h"
+#include "models/dit/utils/util.h"
+#endif
 
 namespace xllm {
 namespace joyimage {
@@ -687,6 +692,12 @@ class TransformerBlockImpl final : public torch::nn::Module {
     attn_->verify_loaded_weights(prefix + "attn.");
   }
 
+#if defined(USE_NPU)
+  void build_weight_loader() { weight_loader_.build_from_module(*this); }
+
+  dit::BlockWeightLoader& weight_loader() { return weight_loader_; }
+#endif
+
  private:
   double eps_;
   Modulate img_mod_{nullptr};
@@ -700,6 +711,9 @@ class TransformerBlockImpl final : public torch::nn::Module {
   qwenimage::FeedForward img_mlp_{nullptr};
   qwenimage::FeedForward txt_mlp_{nullptr};
   JoyAttention attn_{nullptr};
+#if defined(USE_NPU)
+  dit::BlockWeightLoader weight_loader_;
+#endif
 };
 TORCH_MODULE(TransformerBlock);
 
@@ -862,10 +876,21 @@ class JoyImageEditPlusTransformer3DModelImpl final
         CacheBlockIn block_before(block_index);
         const bool use_block_cache =
             DiTCache::get_instance().on_before_block(block_before, use_cfg);
+#if defined(USE_NPU)
+        if (rolling_load_enabled_) {
+          rolling_load_manager_.wait_h2d(static_cast<int32_t>(block_index));
+        }
+#endif
         if (!use_block_cache) {
           std::tie(img, txt) = block_layers_[block_index]->forward(
               img, txt, temb6, rope_cos, rope_sin, attention_mask);
         }
+#if defined(USE_NPU)
+        if (rolling_load_enabled_) {
+          rolling_load_manager_.schedule_next_h2d(
+              static_cast<int32_t>(block_index));
+        }
+#endif
 
         TensorMap block_after_map = {
             {"hidden_states", img},
@@ -905,17 +930,27 @@ class JoyImageEditPlusTransformer3DModelImpl final
     return out.to(x.dtype());
   }
 
-  void load_model(std::unique_ptr<DiTFolderLoader> loader) {
+  void load_model(std::unique_ptr<DiTFolderLoader> loader,
+                  bool rolling = false) {
+#if defined(USE_NPU)
+    if (rolling) {
+      dit::to_bf16_preserve_quant(*this, torch::kCPU);
+    }
+#endif
+    auto load_options = options_;
+    if (rolling) {
+      load_options = load_options.device(torch::kCPU);
+    }
     for (const auto& state_dict : loader->get_state_dicts()) {
       // Conv3d img_in: load raw weight/bias.
       auto w = state_dict->get_tensor("img_in.weight");
       auto b = state_dict->get_tensor("img_in.bias");
       if (w.defined()) {
-        img_in_->weight.data().copy_(w.to(options_));
+        img_in_->weight.data().copy_(w.to(load_options));
         img_in_weight_loaded_ = true;
       }
       if (b.defined()) {
-        img_in_->bias.data().copy_(b.to(options_));
+        img_in_->bias.data().copy_(b.to(load_options));
         img_in_bias_loaded_ = true;
       }
       condition_embedder_->load_state_dict(
@@ -928,6 +963,23 @@ class JoyImageEditPlusTransformer3DModelImpl final
       }
     }
     verify_loaded_weights();
+
+#if defined(USE_NPU)
+    if (rolling) {
+      for (auto& block : block_layers_) {
+        block->build_weight_loader();
+      }
+      c10_npu::NPUCachingAllocator::emptyCache();
+
+      auto device = options_.device();
+      img_in_->to(device);
+      condition_embedder_->to(device);
+      proj_out_->to(device);
+
+      rolling_load_manager_.init_for_model(get_block_weight_loaders(), device);
+      rolling_load_enabled_ = true;
+    }
+#endif
     LOG(INFO) << "JoyImageEditPlus transformer loaded successfully.";
   }
 
@@ -943,6 +995,17 @@ class JoyImageEditPlusTransformer3DModelImpl final
   }
 
   void keep_fp32_modules() { condition_embedder_->keep_fp32_modules(); }
+
+#if defined(USE_NPU)
+  std::vector<dit::BlockWeightLoader*> get_block_weight_loaders() {
+    std::vector<dit::BlockWeightLoader*> loaders;
+    loaders.reserve(block_layers_.size());
+    for (auto& block : block_layers_) {
+      loaders.push_back(&block->weight_loader());
+    }
+    return loaders;
+  }
+#endif
 
  private:
   torch::TensorOptions options_;
@@ -960,6 +1023,10 @@ class JoyImageEditPlusTransformer3DModelImpl final
   layer::AddMatmulWeightTransposed proj_out_{nullptr};
   bool img_in_weight_loaded_{false};
   bool img_in_bias_loaded_{false};
+#if defined(USE_NPU)
+  bool rolling_load_enabled_{false};
+  dit::DitRollingLoadManager rolling_load_manager_;
+#endif
 };
 TORCH_MODULE(JoyImageEditPlusTransformer3DModel);
 

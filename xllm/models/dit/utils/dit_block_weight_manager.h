@@ -25,6 +25,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "core/framework/config/load_config.h"
 #include "core/layers/npu/loader/rolling_weight_buffer.h"
 #include "core/platform/stream.h"
 
@@ -126,13 +127,40 @@ class DitRollingLoadManager final {
     }
 
     next_layer_in_slot_.assign(num_layers, -1);
+    first_layer_in_slot_.assign(num_slots_, -1);
     std::vector<int32_t> last_in_slot(num_slots_, -1);
     for (int32_t i = num_layers - 1; i >= 0; --i) {
       int32_t slot = i % num_slots_;
       next_layer_in_slot_[i] = last_in_slot[slot];
       last_in_slot[slot] = i;
     }
+    for (int32_t i = 0; i < num_layers; ++i) {
+      int32_t slot = i % num_slots_;
+      if (first_layer_in_slot_[slot] < 0) {
+        first_layer_in_slot_[slot] = i;
+      }
+    }
     refilled_slots_.assign(num_slots_, false);
+  }
+
+  void init_for_model(std::vector<BlockWeightLoader*> loaders,
+                      const torch::Device& device) {
+    CHECK(!loaders.empty());
+    at::DeviceGuard guard(device);
+
+    size_t max_storage = 0;
+    for (auto* loader : loaders) {
+      CHECK(loader != nullptr);
+      max_storage = std::max(max_storage, loader->storage_size());
+    }
+
+    auto& load_config = LoadConfig::get_instance();
+    int32_t num_slots =
+        std::max(load_config.rolling_load_num_rolling_slots(), 2);
+    auto buffer =
+        std::make_shared<layer::RollingWeightBuffer>(num_slots, max_storage);
+    init(std::move(loaders), std::move(buffer), num_slots);
+    preload();
   }
 
   void preload() {
@@ -170,8 +198,10 @@ class DitRollingLoadManager final {
       loaders_[next]->copy_to_device_async(ls);
       CHECK_EQ(aclrtRecordEvent(h2d_events_[next], ls), ACL_SUCCESS);
     } else {
-      loaders_[slot]->copy_to_device_async(ls);
-      CHECK_EQ(aclrtRecordEvent(h2d_events_[slot], ls), ACL_SUCCESS);
+      int32_t first = first_layer_in_slot_[slot];
+      CHECK_GE(first, 0);
+      loaders_[first]->copy_to_device_async(ls);
+      CHECK_EQ(aclrtRecordEvent(h2d_events_[first], ls), ACL_SUCCESS);
       refilled_slots_[slot] = true;
     }
   }
@@ -216,6 +246,7 @@ class DitRollingLoadManager final {
   std::vector<aclrtEvent> h2d_events_;
   std::vector<aclrtEvent> compute_events_;
   std::vector<int32_t> next_layer_in_slot_;
+  std::vector<int32_t> first_layer_in_slot_;
   std::vector<bool> refilled_slots_;
 };
 
