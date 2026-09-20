@@ -128,6 +128,11 @@ tilelang_register_runtime_kernel(
 )
 
 tilelang_register_runtime_kernel(
+  NAME qwen_image_qkv_epilogue
+  WRAPPER_SRCS qwen_image_qkv_epilogue_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
   NAME rope
   WRAPPER_SRCS rope_wrapper.cpp
 )

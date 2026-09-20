@@ -73,6 +73,38 @@ bool can_apply_token_bitmask_inplace(const torch::Tensor& logits,
 void apply_token_bitmask_inplace(torch::Tensor& logits,
                                  const torch::Tensor& bitmask);
 
+// Apply official Q/K RMSNorm, then fuse interleaved RoPE, V copies, and
+// text-first concatenation for Qwen-Image attention. Inputs may be
+// token-narrowed views.
+bool can_qwen_image_qkv_epilogue(const torch::Tensor& img_q,
+                                 const torch::Tensor& img_k,
+                                 const torch::Tensor& img_v,
+                                 const torch::Tensor& txt_q,
+                                 const torch::Tensor& txt_k,
+                                 const torch::Tensor& txt_v,
+                                 const torch::Tensor& img_q_weight,
+                                 const torch::Tensor& img_k_weight,
+                                 const torch::Tensor& txt_q_weight,
+                                 const torch::Tensor& txt_k_weight,
+                                 const torch::Tensor& rotary_cos,
+                                 const torch::Tensor& rotary_sin);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> qwen_image_qkv_epilogue(
+    const torch::Tensor& img_q,
+    const torch::Tensor& img_k,
+    const torch::Tensor& img_v,
+    const torch::Tensor& txt_q,
+    const torch::Tensor& txt_k,
+    const torch::Tensor& txt_v,
+    const torch::Tensor& img_q_weight,
+    const torch::Tensor& img_k_weight,
+    const torch::Tensor& txt_q_weight,
+    const torch::Tensor& txt_k_weight,
+    const torch::Tensor& rotary_cos,
+    const torch::Tensor& rotary_sin,
+    double img_eps,
+    double txt_eps);
+
 // Apply TileLang RoPE kernel in-place on a single input tensor.
 // Invalid inputs trigger CHECK failures.
 // Supports input not contiguous, with stride.
