@@ -5,7 +5,7 @@ if(NOT USE_NPU)
   return()
 endif()
 
-if(NOT DEFINED ENV{NPU_HOME_PATH})
+if(NOT DEFINED ENV{NPU_HOME_PATH} AND NOT DEFINED NPU_HOME_PATH)
   message(FATAL_ERROR "NPU_HOME_PATH is not set")
 endif()
 

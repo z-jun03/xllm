@@ -378,7 +378,7 @@ find_package(benchmark CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED)
 find_package(FFMPEG REQUIRED)
-find_package(Python COMPONENTS Development REQUIRED)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
 if(Python_EXECUTABLE AND NOT Python3_EXECUTABLE)
     set(Python3_EXECUTABLE "${Python_EXECUTABLE}")
@@ -478,7 +478,7 @@ if(USE_NPU)
   add_definitions(-DTORCH_HIGHER_THAN_PTA6)
 
   # Use vcpkg header files as the first priority search directory,
-  #-> because the scope of third-party softwares managed by vcpkg is used throughout the entire xllm.
+  #-> because the scope of third-party software managed by vcpkg is used throughout the entire xllm.
   message(STATUS "VCPKG_INCLUDE_DIR = ${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include")
   include_directories("${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include")
 
