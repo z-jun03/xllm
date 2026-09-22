@@ -42,6 +42,45 @@ cc_test(
 
 cc_test(
   NAME
+    wan_causal_conv3d_input_wrapper_test
+  SRCS
+    wan_causal_conv3d_input_wrapper_test.cpp
+  DEPS
+    :tilelang_kernels
+    torch
+    GTest::gtest_main
+    glog::glog
+    unified_dlog
+)
+
+cc_test(
+  NAME
+    wan_blocked_norm_silu_wrapper_test
+  SRCS
+    wan_blocked_norm_silu_wrapper_test.cpp
+  DEPS
+    :tilelang_kernels
+    torch
+    GTest::gtest_main
+    glog::glog
+    unified_dlog
+)
+
+cc_test(
+  NAME
+    strict_adalayer_norm_wrapper_test
+  SRCS
+    strict_adalayer_norm_wrapper_test.cpp
+  DEPS
+    :tilelang_kernels
+    torch
+    GTest::gtest_main
+    glog::glog
+    unified_dlog
+)
+
+cc_test(
+  NAME
     spec_verify_token_update_wrapper_test
   SRCS
     spec_verify_token_update_wrapper_test.cpp

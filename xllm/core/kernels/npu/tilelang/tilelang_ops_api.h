@@ -73,6 +73,47 @@ bool can_apply_token_bitmask_inplace(const torch::Tensor& logits,
 void apply_token_bitmask_inplace(torch::Tensor& logits,
                                  const torch::Tensor& bitmask);
 
+// Pack contiguous [B, S, H, D] Q/K/V inputs into a destination-major A2A
+// buffer [world_size, S, B, H / world_size, 3D] on NPU.
+bool can_pack_qkv_destination_major(const torch::Tensor& query,
+                                    const torch::Tensor& key,
+                                    const torch::Tensor& value,
+                                    const torch::Tensor& packed_output,
+                                    int64_t world_size);
+
+void pack_qkv_destination_major(const torch::Tensor& query,
+                                const torch::Tensor& key,
+                                const torch::Tensor& value,
+                                torch::Tensor& packed_output,
+                                int64_t world_size);
+
+// Build a temporally padded Wan Causal Conv3D input and the next two-frame
+// feature cache in one pass. The supported path is BF16 NCTHW on NPU.
+bool can_wan_causal_conv3d_input(const torch::Tensor& hidden_states,
+                                 const torch::Tensor& feature_cache);
+
+std::pair<torch::Tensor, torch::Tensor> wan_causal_conv3d_input(
+    const torch::Tensor& hidden_states,
+    const torch::Tensor& feature_cache);
+
+// Apply the numerically strict Wan RMSNorm rounding chain and SiLU while
+// preserving an NDC1HWC0 activation layout for the following Conv3D.
+bool can_wan_blocked_norm_silu(const torch::Tensor& input,
+                               const torch::Tensor& gamma);
+
+torch::Tensor wan_blocked_norm_silu(const torch::Tensor& input,
+                                    const torch::Tensor& gamma);
+
+bool can_wan_blocked_norm_silu_causal_input(
+    const torch::Tensor& input,
+    const torch::Tensor& gamma,
+    const torch::Tensor& feature_cache);
+
+std::pair<torch::Tensor, torch::Tensor>
+wan_blocked_norm_silu_causal_input(const torch::Tensor& input,
+                                   const torch::Tensor& gamma,
+                                   const torch::Tensor& feature_cache);
+
 // Apply official Q/K RMSNorm, then fuse interleaved RoPE, V copies, and
 // text-first concatenation for Qwen-Image attention. Inputs may be
 // token-narrowed views.
@@ -104,6 +145,17 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> qwen_image_qkv_epilogue(
     const torch::Tensor& rotary_sin,
     double img_eps,
     double txt_eps);
+
+// Fuse LayerNorm and adaptive scale/shift while preserving the BF16 rounding
+// points used by the unfused PyTorch expression.
+bool can_strict_adalayer_norm(const torch::Tensor& input,
+                              const torch::Tensor& scale,
+                              const torch::Tensor& shift);
+
+torch::Tensor strict_adalayer_norm(const torch::Tensor& input,
+                                   const torch::Tensor& scale,
+                                   const torch::Tensor& shift,
+                                   double eps);
 
 // Apply TileLang RoPE kernel in-place on a single input tensor.
 // Invalid inputs trigger CHECK failures.
@@ -198,6 +250,24 @@ torch::Tensor causal_conv1d_decode(torch::Tensor& conv_state,
 bool has_causal_conv1d_decode_specialization(int64_t batch_size,
                                              int64_t dim,
                                              bool has_silu);
+
+// Update FP32 online-softmax state from one BF16 NPU fusion-attention tile.
+// State tensors use [B, H, S] / [B, H, S, D] layouts. The FusionAttention
+// statistic tensors retain their native [B, H, S, stat_width] layout.
+bool can_update_online_softmax_state(
+    const torch::Tensor& state_max,
+    const torch::Tensor& state_normalizer,
+    const torch::Tensor& state_weighted_value,
+    const torch::Tensor& tile_output,
+    const torch::Tensor& tile_max_stats,
+    const torch::Tensor& tile_normalizer_stats);
+
+void update_online_softmax_state(torch::Tensor& state_max,
+                                 torch::Tensor& state_normalizer,
+                                 torch::Tensor& state_weighted_value,
+                                 const torch::Tensor& tile_output,
+                                 const torch::Tensor& tile_max_stats,
+                                 const torch::Tensor& tile_normalizer_stats);
 
 // CausalConv1D general kernel for variable-length batches on NPU.
 //

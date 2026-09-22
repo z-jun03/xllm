@@ -53,9 +53,91 @@ DEFINE_int64(dit_cache_end_blocks,
              5,
              "The number of blocks to skip at the end.");
 
+DEFINE_bool(dit_qwen_image_cfg_modulation_cache,
+            false,
+            "Reuse Qwen-Image modulation projections across serial true-CFG "
+            "branches.");
+
 DEFINE_bool(dit_sp_communication_overlap,
             true,
             "Communication & Computation overlap for sequence parallel");
+
+DEFINE_bool(dit_sp_packed_qkv_all_to_all,
+            false,
+            "Pack sequence-parallel Q/K/V all-to-all into one collective.");
+
+DEFINE_bool(dit_sp_packed_qkv_triton_pack,
+            false,
+            "Use the experimental Triton Q/K/V pack kernel for packed "
+            "sequence-parallel all-to-all.");
+
+DEFINE_bool(dit_sp_packed_qkv_input_overlap,
+            false,
+            "Overlap image Q/K normalization with text packed Q/K/V "
+            "sequence-parallel all-to-all.");
+
+DEFINE_bool(dit_sp_packed_qkv_comm_stream_overlap,
+            false,
+            "Launch packed Q/K/V sequence-parallel all-to-all on a dedicated "
+            "NPU stream with event-based compute dependencies.");
+
+DEFINE_bool(dit_sp_fused_qkv_projection,
+            false,
+            "Fuse JoyImageEdit Q/K/V projections before packed "
+            "sequence-parallel all-to-all.");
+
+DEFINE_bool(dit_sp_fused_qkv_postprocess,
+            false,
+            "Fuse JoyImageEdit packed Q/K/V unpack, image Q/K RMSNorm, and "
+            "RoPE after sequence-parallel all-to-all.");
+
+DEFINE_bool(dit_sp_ring_kv_attention,
+            false,
+            "Use the experimental JoyImageEdit Ring-KV sequence-parallel "
+            "attention backend.");
+
+DEFINE_bool(dit_sp_ring_kv_packed_transfer,
+            false,
+            "Pack Ring-KV K/V into one P2P transfer. This is experimental "
+            "and disabled by default.");
+
+DEFINE_bool(dit_sp_ring_kv_comm_stream_overlap,
+            false,
+            "Launch the next Ring-KV P2P transfer on a dedicated NPU stream "
+            "while the current KV tile attention runs on the compute stream.");
+
+DEFINE_bool(
+    dit_sp_ring_kv_native_attention_update,
+    false,
+    "Use CANN npu_attention_update to merge Ring-KV attention tiles. "
+    "This experimental path can differ by BF16 rounding and is disabled "
+    "by default.");
+
+DEFINE_bool(
+    dit_sp_ring_kv_tilelang_online_update,
+    false,
+    "Use the experimental TileLang FP32 online-softmax state update for "
+    "Ring-KV attention tiles. This only supports BF16 head_dim=128.");
+
+DEFINE_int32(dit_sp_ring_kv_sequence_chunks,
+             1,
+             "Split each SP=2 Ring-KV shard into sequence chunks and pipeline "
+             "the next P2P transfer with remote-chunk attention. This "
+             "experimental path can optionally pack each K/V chunk.");
+
+DEFINE_bool(dit_sp_packed_qkv_attention_overlap,
+            false,
+            "Overlap packed Q/K/V sequence-parallel all-to-all with "
+            "JoyImageEdit attention over destination-head tiles.");
+
+DEFINE_int32(dit_sp_packed_qkv_attention_overlap_tiles,
+             2,
+             "Number of destination-head tiles for packed Q/K/V attention "
+             "overlap.");
+
+DEFINE_bool(dit_sp_profile,
+            false,
+            "Log sequence-parallel attention stage timings for diagnostics.");
 
 DEFINE_bool(dit_debug_print,
             false,
@@ -131,7 +213,23 @@ void DiTConfig::from_flags() {
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_cache_end_steps);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_cache_start_blocks);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_cache_end_blocks);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_qwen_image_cfg_modulation_cache);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_communication_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_all_to_all);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_triton_pack);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_input_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_comm_stream_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_fused_qkv_projection);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_fused_qkv_postprocess);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_attention);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_packed_transfer);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_comm_stream_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_native_attention_update);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_tilelang_online_update);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_ring_kv_sequence_chunks);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_attention_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_packed_qkv_attention_overlap_tiles);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_sp_profile);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_debug_print);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_laser_attention_enabled);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(dit_generation_image_area_max);
@@ -157,7 +255,23 @@ void DiTConfig::from_json(const JsonReader& json) {
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_cache_end_steps);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_cache_start_blocks);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_cache_end_blocks);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_qwen_image_cfg_modulation_cache);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_communication_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_all_to_all);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_triton_pack);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_input_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_comm_stream_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_fused_qkv_projection);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_fused_qkv_postprocess);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_attention);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_packed_transfer);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_comm_stream_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_native_attention_update);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_tilelang_online_update);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_ring_kv_sequence_chunks);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_attention_overlap);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_packed_qkv_attention_overlap_tiles);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(dit_sp_profile);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_debug_print);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_laser_attention_enabled);
   XLLM_CONFIG_ASSIGN_FROM_JSON(dit_generation_image_area_max);
@@ -195,7 +309,33 @@ void DiTConfig::append_config_json(nlohmann::ordered_json& config_json) const {
   APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
       config_json, default_config, dit_cache_end_blocks);
   APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_qwen_image_cfg_modulation_cache);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
       config_json, default_config, dit_sp_communication_overlap);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_all_to_all);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_triton_pack);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_input_overlap);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_comm_stream_overlap);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_fused_qkv_projection);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_fused_qkv_postprocess);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_ring_kv_attention);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_ring_kv_packed_transfer);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_ring_kv_comm_stream_overlap);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_attention_overlap);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_packed_qkv_attention_overlap_tiles);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, dit_sp_profile);
   APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
       config_json, default_config, dit_debug_print);
   APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(

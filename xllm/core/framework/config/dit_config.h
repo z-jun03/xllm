@@ -51,7 +51,23 @@ class DiTConfig final {
          "dit_cache_end_steps",
          "dit_cache_start_blocks",
          "dit_cache_end_blocks",
+         "dit_qwen_image_cfg_modulation_cache",
          "dit_sp_communication_overlap",
+         "dit_sp_packed_qkv_all_to_all",
+         "dit_sp_packed_qkv_triton_pack",
+         "dit_sp_packed_qkv_input_overlap",
+         "dit_sp_packed_qkv_comm_stream_overlap",
+         "dit_sp_fused_qkv_projection",
+         "dit_sp_fused_qkv_postprocess",
+         "dit_sp_ring_kv_attention",
+         "dit_sp_ring_kv_packed_transfer",
+         "dit_sp_ring_kv_comm_stream_overlap",
+         "dit_sp_ring_kv_native_attention_update",
+         "dit_sp_ring_kv_tilelang_online_update",
+         "dit_sp_ring_kv_sequence_chunks",
+         "dit_sp_packed_qkv_attention_overlap",
+         "dit_sp_packed_qkv_attention_overlap_tiles",
+         "dit_sp_profile",
          "dit_debug_print",
          "dit_laser_attention_enabled",
          "dit_generation_image_area_max",
@@ -87,7 +103,39 @@ class DiTConfig final {
 
   PROPERTY(int64_t, dit_cache_end_blocks) = 5;
 
+  PROPERTY(bool, dit_qwen_image_cfg_modulation_cache) = false;
+
   PROPERTY(bool, dit_sp_communication_overlap) = true;
+
+  PROPERTY(bool, dit_sp_packed_qkv_all_to_all) = false;
+
+  PROPERTY(bool, dit_sp_packed_qkv_triton_pack) = false;
+
+  PROPERTY(bool, dit_sp_packed_qkv_input_overlap) = false;
+
+  PROPERTY(bool, dit_sp_packed_qkv_comm_stream_overlap) = false;
+
+  PROPERTY(bool, dit_sp_fused_qkv_projection) = false;
+
+  PROPERTY(bool, dit_sp_fused_qkv_postprocess) = false;
+
+  PROPERTY(bool, dit_sp_ring_kv_attention) = false;
+
+  PROPERTY(bool, dit_sp_ring_kv_packed_transfer) = false;
+
+  PROPERTY(bool, dit_sp_ring_kv_comm_stream_overlap) = false;
+
+  PROPERTY(bool, dit_sp_ring_kv_native_attention_update) = false;
+
+  PROPERTY(bool, dit_sp_ring_kv_tilelang_online_update) = false;
+
+  PROPERTY(int32_t, dit_sp_ring_kv_sequence_chunks) = 1;
+
+  PROPERTY(bool, dit_sp_packed_qkv_attention_overlap) = false;
+
+  PROPERTY(int32_t, dit_sp_packed_qkv_attention_overlap_tiles) = 2;
+
+  PROPERTY(bool, dit_sp_profile) = false;
 
   PROPERTY(bool, dit_debug_print) = false;
 

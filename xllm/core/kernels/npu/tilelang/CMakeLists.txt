@@ -128,8 +128,38 @@ tilelang_register_runtime_kernel(
 )
 
 tilelang_register_runtime_kernel(
+  NAME pack_qkv_destination_major
+  WRAPPER_SRCS pack_qkv_destination_major_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
+  NAME wan_causal_conv3d_input
+  WRAPPER_SRCS wan_causal_conv3d_input_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
+  NAME wan_blocked_norm_silu
+  WRAPPER_SRCS wan_blocked_norm_silu_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
+  NAME wan_blocked_norm_silu_causal_input
+  WRAPPER_SRCS wan_blocked_norm_silu_causal_input_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
   NAME qwen_image_qkv_epilogue
   WRAPPER_SRCS qwen_image_qkv_epilogue_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
+  NAME strict_adalayer_norm
+  WRAPPER_SRCS strict_adalayer_norm_wrapper.cpp
+)
+
+tilelang_register_runtime_kernel(
+  NAME online_softmax_state_update
+  WRAPPER_SRCS online_softmax_state_update_wrapper.cpp
 )
 
 tilelang_register_runtime_kernel(

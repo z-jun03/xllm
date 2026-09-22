@@ -44,6 +44,7 @@ cc_library(
     $<$<BOOL:${USE_NPU}>:hccl>
     $<$<BOOL:${USE_NPU}>:hcomm>
     $<$<BOOL:${USE_NPU}>:xllm_atb_layers>
+    $<$<BOOL:${USE_NPU}>:triton_adapter>
     gflags::gflags
     glog::glog
 )

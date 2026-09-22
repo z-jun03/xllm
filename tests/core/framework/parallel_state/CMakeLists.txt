@@ -3,6 +3,29 @@ include(cc_test)
 if(USE_NPU)
   cc_test(
     NAME
+      online_softmax_attention_test
+    SRCS
+      online_softmax_attention_test.cpp
+    DEPS
+      parallel_state
+      torch
+      GTest::gtest_main
+  )
+
+  cc_test(
+    NAME
+      ring_kv_online_softmax_npu_test
+    SRCS
+      ring_kv_online_softmax_npu_test.cpp
+    DEPS
+      parallel_state
+      torch
+      torch_npu
+      GTest::gtest_main
+  )
+
+  cc_test(
+    NAME
       mapping_npu_test
     SRCS
       mapping_npu_test.cpp
