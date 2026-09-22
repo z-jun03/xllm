@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -55,6 +56,36 @@ void fill_epsilon_boundary_input(torch::Tensor& input) {
         .fill_(values[column_index]);
   }
 }
+
+// Copies the dispatch-knob state and restores it on destruction, so a test can
+// force the fused kernel or the eager reference chain without leaking state
+// into other tests running in the same process.
+class ScopedDispatchEnv {
+ public:
+  explicit ScopedDispatchEnv(const char* value) {
+    previous_ = std::getenv(kEnvName);
+    if (value == nullptr) {
+      if (previous_ != nullptr) {
+        unsetenv(kEnvName);
+      }
+      return;
+    }
+    setenv(kEnvName, value, /*overwrite=*/1);
+  }
+
+  ~ScopedDispatchEnv() {
+    if (previous_ == nullptr) {
+      unsetenv(kEnvName);
+    } else {
+      setenv(kEnvName, previous_, /*overwrite=*/1);
+    }
+  }
+
+ private:
+  // Must stay in sync with the wrapper's dispatch env variable.
+  static constexpr char kEnvName[] = "XLLM_TL_WAN_BLOCKED_NORM_SILU_DISPATCH";
+  const char* previous_;
+};
 
 void expect_causal_input_matches_reference(const torch::Tensor& input,
                                            const torch::Tensor& gamma,
@@ -466,6 +497,73 @@ TEST(WanBlockedNormSiluCausalInputWrapperTest,
     EXPECT_TRUE(torch::equal(conv_input, expected_input));
     EXPECT_TRUE(torch::equal(next_cache, reference_cache));
     feature_cache = next_cache;
+  }
+}
+
+TEST(WanBlockedNormSiluCausalInputWrapperTest,
+     DispatchFallbackMatchesReferenceExactly) {
+  struct DispatchCase {
+    std::string name;
+    int64_t channels;
+    int64_t temporal;
+    int64_t height;
+    int64_t width;
+    int64_t cache_temporal;
+  };
+  // Shapes the automatic dispatch routes to the eager reference chain:
+  // tiny, channel-heavy planes.
+  const std::vector<DispatchCase> dispatch_cases = {
+      {"tiny_65x65_c640_cache2", 640, 4, 65, 65, 2},
+      {"tiny_65x65_c512_cache2", 512, 4, 65, 65, 2},
+      {"tiny_33x33_c640", 640, 4, 33, 33, 1},
+      {"tiny_33x33_c1024", 1024, 4, 33, 33, 2},
+      {"tiny_45x46_c640", 640, 4, 45, 46, 1},
+      {"tiny_17x17_c640", 640, 4, 17, 17, 1},
+      // Shapes the automatic dispatch routes to the fused kernel.
+      {"aligned_512x512_c96", 96, 4, 512, 512, 1},
+      {"wide_256x256_c640", 640, 4, 256, 256, 1},
+      {"tiny_32x32_c640", 640, 4, 32, 32, 1},
+      {"tiny_65x65_c384_cache2", 384, 4, 65, 65, 2},
+      {"tiny_65x65_c96", 96, 4, 65, 65, 1},
+      {"tiny_33x33_c384", 384, 4, 33, 33, 1},
+  };
+  const torch::Device device("npu:0");
+  const torch::TensorOptions options =
+      torch::TensorOptions().dtype(torch::kBFloat16).device(device);
+
+  for (const DispatchCase& dispatch_case : dispatch_cases) {
+    SCOPED_TRACE(dispatch_case.name);
+    torch::manual_seed(20260922 + dispatch_case.temporal +
+                       dispatch_case.height + dispatch_case.width);
+    torch::Tensor input = torch::randn(
+        {1,
+         dispatch_case.channels,
+         dispatch_case.temporal,
+         dispatch_case.height,
+         dispatch_case.width},
+        options);
+    torch::Tensor gamma =
+        torch::randn({dispatch_case.channels, 1, 1, 1}, options);
+    torch::Tensor feature_cache = torch::randn(
+        {1,
+         dispatch_case.channels,
+         dispatch_case.cache_temporal,
+         dispatch_case.height,
+         dispatch_case.width},
+        options);
+
+    {  // Automatic dispatch.
+      ScopedDispatchEnv env(nullptr);
+      expect_causal_input_matches_reference(input, gamma, feature_cache);
+    }
+    {  // Force the fused TileLang kernel.
+      ScopedDispatchEnv env("fused");
+      expect_causal_input_matches_reference(input, gamma, feature_cache);
+    }
+    {  // Force the eager reference chain.
+      ScopedDispatchEnv env("eager");
+      expect_causal_input_matches_reference(input, gamma, feature_cache);
+    }
   }
 }
 
