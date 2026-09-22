@@ -21,7 +21,9 @@ limitations under the License.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "core/kernels/npu/tilelang/dispatch_registry.h"
@@ -37,6 +39,29 @@ namespace {
 constexpr int64_t kMinimumTemporal = 1;
 constexpr int64_t kCacheTemporal = 2;
 constexpr int64_t kMinimumPlaneElements = 16;
+
+// Normalization floor; must match NORM_EPS in the TileLang kernel.
+constexpr double kNormalizationEps = 1e-12;
+// Tile size of the first (main) kernel launch; must match
+// CAUSAL_SPATIAL_TILES[0] in the TileLang kernel module.
+constexpr int64_t kSpatialTileMain = 4096;
+// Test/debug knob; "fused" forces the TileLang kernel, "eager" forces the
+// reference chain, any other value falls back to automatic dispatch.
+constexpr char kWanBlockedNormSiluDispatchEnv[] =
+    "XLLM_TL_WAN_BLOCKED_NORM_SILU_DISPATCH";
+// For tiny, channel-heavy planes the spatial tiling fragments into small
+// tail tiles and the fused kernel's per-(channel, temporal) task-launch
+// fixed overhead dominates, so such shapes dispatch to the eager reference
+// chain. Calibrated on Ascend 910_9382 (48 vector cores, Sep 2026), where
+// "work per task" is plane_elements / tiles-per-(channel-temporal):
+//   >=1024 with a single tile (32x32): 640ch fused 1.70x       keep
+//   1408 (65x65): 640ch cache1 1.09x / cache2 0.95x             cache2 falls back
+//   1035 (45x46): 640ch 0.79x, 384ch 1.03x                      640ch falls back
+//   544 (33x33): 640ch ~1.0x, 512ch 1.10x, 1024ch 0.81x         640ch+ falls back
+constexpr int32_t kFallbackWorkPerTask = 1100;
+constexpr int32_t kFallbackChannels = 640;
+constexpr int32_t kFallbackCachedWorkPerTask = 1500;
+constexpr int32_t kFallbackCachedChannels = 512;
 
 #include XLLM_TL_WAN_BLOCKED_NORM_SILU_CAUSAL_INPUT_REGISTRY_INC
 
@@ -70,6 +95,90 @@ int32_t select_spatial_tile(int64_t plane_elements) {
     return 32;
   }
   return 16;
+}
+
+enum class WanBlockedNormSiluDispatchMode { AUTO, FORCE_FUSED, FORCE_EAGER };
+
+WanBlockedNormSiluDispatchMode wan_blocked_norm_silu_dispatch_mode() {
+  const char* raw = std::getenv(kWanBlockedNormSiluDispatchEnv);
+  if (raw == nullptr) {
+    return WanBlockedNormSiluDispatchMode::AUTO;
+  }
+  const std::string value(raw);
+  if (value == "fused") {
+    return WanBlockedNormSiluDispatchMode::FORCE_FUSED;
+  }
+  if (value == "eager") {
+    return WanBlockedNormSiluDispatchMode::FORCE_EAGER;
+  }
+  LOG(WARNING) << "Unknown value \"" << value << "\" for "
+               << kWanBlockedNormSiluDispatchEnv
+               << "; falling back to automatic dispatch.";
+  return WanBlockedNormSiluDispatchMode::AUTO;
+}
+
+// Returns true when the fused TileLang kernel is expected to lose to the
+// eager reference chain for this shape (see the calibration comment on the
+// kFallback* constants above).
+bool should_use_eager_fallback(int64_t channels,
+                               int64_t cache_temporal,
+                               int64_t plane_elements) {
+  const int64_t main_tiles = plane_elements / kSpatialTileMain;
+  const int64_t tail_elements = plane_elements % kSpatialTileMain;
+  int64_t tiles = main_tiles;
+  if (tail_elements > 0) {
+    const int32_t spatial_tile = select_spatial_tile(tail_elements);
+    tiles += (tail_elements + spatial_tile - 1) / spatial_tile;
+  }
+  if (tiles <= 1) {
+    // One clean tile per (channel, temporal): the kernel always amortizes
+    // the launches regardless of channel width.
+    return false;
+  }
+  const int64_t work_per_task = plane_elements / tiles;
+  if (work_per_task < kFallbackWorkPerTask &&
+      channels >= kFallbackChannels) {
+    return true;
+  }
+  if (cache_temporal == kCacheTemporal &&
+      work_per_task < kFallbackCachedWorkPerTask &&
+      channels >= kFallbackCachedChannels) {
+    return true;
+  }
+  return false;
+}
+
+// Reference chain that the fused kernel replaces; kept bitwise-identical to
+// the authoritative expectation used by the wrapper tests.
+std::pair<torch::Tensor, torch::Tensor> compute_causal_input_eager(
+    const torch::Tensor& input,
+    const torch::Tensor& gamma,
+    const torch::Tensor& feature_cache) {
+  const int64_t cache_temporal =
+      feature_cache.defined() && feature_cache.numel() > 0
+          ? feature_cache.size(2)
+          : 0;
+  torch::Tensor activated = torch::nn::functional::normalize(
+      input.to(torch::kFloat32),
+      torch::nn::functional::NormalizeFuncOptions()
+          .dim(1)
+          .eps(kNormalizationEps))
+      .to(input.scalar_type());
+  activated = activated * std::sqrt(static_cast<double>(input.size(1)));
+  activated = torch::silu(activated * gamma);
+  torch::Tensor combined =
+      feature_cache.defined() && feature_cache.numel() > 0
+          ? torch::cat({feature_cache, activated}, 2)
+          : activated;
+  torch::Tensor conv_input = torch::nn::functional::pad(
+      combined,
+      torch::nn::functional::PadFuncOptions(
+          {0, 0, 0, 0, kCacheTemporal - cache_temporal, 0}));
+  torch::Tensor next_cache =
+      combined
+          .slice(2, std::max<int64_t>(combined.size(2) - kCacheTemporal, 0))
+          .clone();
+  return {conv_input, next_cache};
 }
 
 WanBlockedNormSiluCausalInputSpecialization build_runtime_specialization(
@@ -162,6 +271,16 @@ std::pair<torch::Tensor, torch::Tensor> wan_blocked_norm_silu_causal_input(
   const int64_t temporal = input.size(2);
   const int64_t next_cache_temporal =
       std::min(kCacheTemporal, temporal + cache_temporal);
+  const int64_t plane_elements = input.size(3) * input.size(4);
+  const WanBlockedNormSiluDispatchMode mode =
+      wan_blocked_norm_silu_dispatch_mode();
+  const bool use_eager =
+      mode == WanBlockedNormSiluDispatchMode::FORCE_EAGER ||
+      (mode == WanBlockedNormSiluDispatchMode::AUTO &&
+       should_use_eager_fallback(channels, cache_temporal, plane_elements));
+  if (use_eager) {
+    return compute_causal_input_eager(input, gamma, feature_cache);
+  }
   const torch::Tensor norm =
       torch::linalg_vector_norm(input, 2.0, {1}, true, torch::kFloat32);
   torch::Tensor conv_input = torch::empty(
@@ -175,7 +294,6 @@ std::pair<torch::Tensor, torch::Tensor> wan_blocked_norm_silu_causal_input(
                             : const_cast<void*>(input.data_ptr());
   aclrtStream stream =
       c10_npu::getCurrentNPUStream(input.device().index()).stream();
-  const int64_t plane_elements = input.size(3) * input.size(4);
   const auto launch = [&](int32_t spatial_tile,
                           int32_t spatial_begin,
                           int32_t spatial_elements) {
