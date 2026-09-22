@@ -104,15 +104,14 @@ bool can_wan_blocked_norm_silu(const torch::Tensor& input,
 torch::Tensor wan_blocked_norm_silu(const torch::Tensor& input,
                                     const torch::Tensor& gamma);
 
-bool can_wan_blocked_norm_silu_causal_input(
+bool can_wan_blocked_norm_silu_causal_input(const torch::Tensor& input,
+                                            const torch::Tensor& gamma,
+                                            const torch::Tensor& feature_cache);
+
+std::pair<torch::Tensor, torch::Tensor> wan_blocked_norm_silu_causal_input(
     const torch::Tensor& input,
     const torch::Tensor& gamma,
     const torch::Tensor& feature_cache);
-
-std::pair<torch::Tensor, torch::Tensor>
-wan_blocked_norm_silu_causal_input(const torch::Tensor& input,
-                                   const torch::Tensor& gamma,
-                                   const torch::Tensor& feature_cache);
 
 // Apply official Q/K RMSNorm, then fuse interleaved RoPE, V copies, and
 // text-first concatenation for Qwen-Image attention. Inputs may be

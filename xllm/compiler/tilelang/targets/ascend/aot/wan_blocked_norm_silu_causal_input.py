@@ -14,8 +14,8 @@
 
 import tilelang
 
-from xllm.python.kernels_npu.tilelang import wan_blocked_norm_silu as kernel_impl
 from xllm.python.kernels_npu.tilelang import utils as tilelang_utils
+from xllm.python.kernels_npu.tilelang import wan_blocked_norm_silu as kernel_impl
 from xllm.python.kernels_npu.tilelang.wan_blocked_norm_silu import (
     CAUSAL_SPATIAL_TILES,
     DEFAULT_DTYPE,
@@ -24,7 +24,6 @@ from xllm.python.kernels_npu.tilelang.wan_blocked_norm_silu import (
 )
 
 from ....common.spec import DispatchField, TilelangKernel, register_kernel
-
 
 DEPENDENCY_MODULES = (kernel_impl, tilelang_utils)
 
@@ -38,9 +37,7 @@ class WanBlockedNormSiluCausalInputKernel(TilelangKernel):
     ]
     SPECIALIZATIONS = [
         {
-            "variant_key": (
-                f"cache{cache_temporal}_tile{spatial_tile}_bf16"
-            ),
+            "variant_key": (f"cache{cache_temporal}_tile{spatial_tile}_bf16"),
             "cache_temporal": cache_temporal,
             "spatial_tile": spatial_tile,
             "dtype": DEFAULT_DTYPE,

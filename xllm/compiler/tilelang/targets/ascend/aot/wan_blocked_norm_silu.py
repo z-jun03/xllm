@@ -17,8 +17,8 @@ from pathlib import Path
 
 import tilelang
 
-from xllm.python.kernels_npu.tilelang import wan_blocked_norm_silu as kernel_impl
 from xllm.python.kernels_npu.tilelang import utils as tilelang_utils
+from xllm.python.kernels_npu.tilelang import wan_blocked_norm_silu as kernel_impl
 from xllm.python.kernels_npu.tilelang.wan_blocked_norm_silu import (
     DEFAULT_CHANNELS,
     DEFAULT_DTYPE,
@@ -29,7 +29,6 @@ from xllm.python.kernels_npu.tilelang.wan_blocked_norm_silu import (
 )
 
 from ....common.spec import DispatchField, TilelangKernel, register_kernel
-
 
 DEPENDENCY_MODULES = (kernel_impl, tilelang_utils)
 
@@ -76,15 +75,11 @@ class WanBlockedNormSiluKernel(TilelangKernel):
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Generate TileLang AscendC source for Wan blocked norm SiLU."
-    )
+    parser = argparse.ArgumentParser(description="Generate TileLang AscendC source for Wan blocked norm SiLU.")
     parser.add_argument("--output", required=True, help="Output AscendC .cpp file")
     parser.add_argument("--channels", type=int, default=DEFAULT_CHANNELS)
     parser.add_argument("--temporal", type=int, default=DEFAULT_TEMPORAL)
-    parser.add_argument(
-        "--plane-elements", type=int, default=DEFAULT_PLANE_ELEMENTS
-    )
+    parser.add_argument("--plane-elements", type=int, default=DEFAULT_PLANE_ELEMENTS)
     parser.add_argument("--dtype", default=DEFAULT_DTYPE)
     return parser.parse_args()
 

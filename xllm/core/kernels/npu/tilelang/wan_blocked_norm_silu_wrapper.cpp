@@ -78,8 +78,8 @@ torch::Tensor wan_blocked_norm_silu(const torch::Tensor& input,
       << "TileLang wan_blocked_norm_silu: unsupported tensor contract; input="
       << input.sizes() << ", gamma=" << gamma.sizes();
 
-  const torch::Tensor norm = torch::linalg_vector_norm(
-      input, 2.0, {1}, true, torch::kFloat32);
+  const torch::Tensor norm =
+      torch::linalg_vector_norm(input, 2.0, {1}, true, torch::kFloat32);
   CHECK(norm.is_contiguous());
   CHECK_EQ(at_npu::native::get_npu_format(norm), ACL_FORMAT_NCDHW);
 
@@ -87,8 +87,7 @@ torch::Tensor wan_blocked_norm_silu(const torch::Tensor& input,
       input.sizes(), input.options(), ACL_FORMAT_NDC1HWC0);
   const WanBlockedNormSiluSpecialization specialization =
       build_runtime_specialization(input);
-  const auto* entry =
-      find_wan_blocked_norm_silu_kernel_entry(specialization);
+  const auto* entry = find_wan_blocked_norm_silu_kernel_entry(specialization);
   CHECK(entry != nullptr)
       << "TileLang wan_blocked_norm_silu: no compiled variant. Available "
          "variants: "
@@ -96,12 +95,11 @@ torch::Tensor wan_blocked_norm_silu(const torch::Tensor& input,
 
   aclrtStream stream =
       c10_npu::getCurrentNPUStream(input.device().index()).stream();
-  entry->fn(
-      reinterpret_cast<uint8_t*>(const_cast<void*>(input.data_ptr())),
-      reinterpret_cast<uint8_t*>(const_cast<void*>(norm.data_ptr())),
-      reinterpret_cast<uint8_t*>(const_cast<void*>(gamma.data_ptr())),
-      reinterpret_cast<uint8_t*>(output.data_ptr()),
-      stream);
+  entry->fn(reinterpret_cast<uint8_t*>(const_cast<void*>(input.data_ptr())),
+            reinterpret_cast<uint8_t*>(const_cast<void*>(norm.data_ptr())),
+            reinterpret_cast<uint8_t*>(const_cast<void*>(gamma.data_ptr())),
+            reinterpret_cast<uint8_t*>(output.data_ptr()),
+            stream);
   return output;
 }
 
