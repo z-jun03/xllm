@@ -58,6 +58,7 @@ target_link_libraries(request_prefix_cache_tokens_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 target_link_options(request_prefix_cache_tokens_test
@@ -80,6 +81,7 @@ target_link_libraries(sequence_kv_state_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 target_link_options(sequence_kv_state_test
@@ -102,6 +104,7 @@ target_link_libraries(sequence_mtp_bootstrap_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 target_link_options(sequence_mtp_bootstrap_test
@@ -124,6 +127,7 @@ target_link_libraries(sequence_generated_tokens_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 target_link_options(sequence_generated_tokens_test
@@ -146,6 +150,7 @@ target_link_libraries(sequence_stop_output_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 target_link_options(sequence_stop_output_test

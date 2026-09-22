@@ -42,6 +42,7 @@ cc_library(
     $<$<BOOL:${USE_MUSA}>:torch_musa>
     $<$<BOOL:${USE_NPU}>:torch_npu>
     $<$<BOOL:${USE_NPU}>:hccl>
+    $<$<BOOL:${USE_NPU}>:unified_dlog>
     $<$<BOOL:${USE_NPU}>:hcomm>
     $<$<BOOL:${USE_NPU}>:xllm_atb_layers>
     $<$<BOOL:${USE_NPU}>:triton_adapter>

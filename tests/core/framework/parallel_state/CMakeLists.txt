@@ -58,6 +58,7 @@ if(USE_NPU)
                         PUBLIC Python::Python
                                ascendcl
                                hccl
+                               unified_dlog
                                c_sec
                                nnopbase)
 
@@ -85,6 +86,7 @@ if(USE_NPU)
                         PUBLIC Python::Python
                                ascendcl
                                hccl
+                               unified_dlog
                                c_sec
                                nnopbase)
 

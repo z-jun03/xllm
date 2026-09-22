@@ -14,6 +14,7 @@ target_link_libraries(kv_cache_estimation_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 
@@ -31,6 +32,7 @@ target_link_libraries(kv_cache_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
 

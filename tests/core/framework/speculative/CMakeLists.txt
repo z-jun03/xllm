@@ -20,6 +20,7 @@ if(USE_NPU)
                         Python::Python
                         ascendcl
                         hccl
+                        unified_dlog
                         c_sec
                         nnopbase)
 endif()
@@ -106,5 +107,6 @@ target_link_libraries(embedding_cache_test
                       Python::Python
                       $<$<BOOL:${USE_NPU}>:ascendcl>
                       $<$<BOOL:${USE_NPU}>:hccl>
+                      $<$<BOOL:${USE_NPU}>:unified_dlog>
                       $<$<BOOL:${USE_NPU}>:c_sec>
                       $<$<BOOL:${USE_NPU}>:nnopbase>)
