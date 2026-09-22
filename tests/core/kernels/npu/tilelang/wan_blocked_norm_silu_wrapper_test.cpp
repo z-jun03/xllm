@@ -129,9 +129,9 @@ std::vector<WanBlockedNormSiluCausalInputTestParam> dynamic_temporal_cases() {
   const std::vector<int64_t> temporal_sizes = {
       1, 2, 3, 4, 5, 8, 17, 33, 65, 129};
   std::vector<WanBlockedNormSiluCausalInputTestParam> cases;
-  cases.reserve(temporal_sizes.size() * 2 * 4);
+  cases.reserve(temporal_sizes.size() * 6 * 4);
   for (int64_t temporal : temporal_sizes) {
-    for (int64_t channels : {96, 192}) {
+    for (int64_t channels : {48, 96, 128, 192, 256, 320}) {
       for (int64_t cache_temporal : {-1, 0, 1, 2}) {
         cases.emplace_back(WanBlockedNormSiluCausalInputTestParam{
             channels, temporal, 17, 19, cache_temporal});
@@ -139,6 +139,31 @@ std::vector<WanBlockedNormSiluCausalInputTestParam> dynamic_temporal_cases() {
     }
   }
   return cases;
+}
+
+// Arbitrary channel counts (any positive value, including values that the
+// kernel previously rejected because channels was hardcoded to {96, 192}).
+std::vector<WanBlockedNormSiluCausalInputTestParam> arbitrary_channels_cases() {
+  const std::vector<WanBlockedNormSiluCausalInputTestParam> channel_shapes = {
+      //{channels, temporal, height, width, cache_temporal}
+      {16, 4, 17, 19, 1},
+      {32, 4, 65, 65, 1},
+      {64, 4, 129, 131, 0},
+      {80, 4, 5, 7, 2},
+      {100, 4, 33, 33, 1},
+      {112, 4, 9, 9, 0},
+      {128, 17, 17, 19, 2},
+      {144, 8, 65, 67, 1},
+      {160, 33, 3, 7, 0},
+      {208, 4, 9, 9, 2},
+      {240, 4, 45, 46, 1},
+      {256, 129, 4, 5, 0},
+      {320, 2, 65, 66, 1},
+      {384, 4, 17, 19, 2},
+      {640, 4, 17, 17, 1},
+      {1024, 4, 33, 33, 2},
+  };
+  return channel_shapes;
 }
 
 TEST(WanBlockedNormSiluWrapperTest, MatchesOfficialBf16PathExactly) {
@@ -294,6 +319,9 @@ TEST(WanBlockedNormSiluCausalInputWrapperTest,
       {"tail_t4_65x65", 96, 4, 65, 65, 1},
       {"long_t17_256x256", 96, 17, 256, 256, 1},
       {"long_t33_256x256", 96, 33, 256, 256, 2},
+      {"wide_c256_t4_512x512", 256, 4, 512, 512, 1},
+      {"wide_c384_t17_256x256", 384, 17, 256, 256, 1},
+      {"wide_c640_t4_65x65", 640, 4, 65, 65, 2},
   };
   const torch::Device device("npu:0");
   const int32_t device_id = device.index();
@@ -445,6 +473,10 @@ INSTANTIATE_TEST_SUITE_P(DynamicTemporalShape,
                          WanBlockedNormSiluCausalInputDynamicShapeTest,
                          testing::ValuesIn(dynamic_temporal_cases()));
 
+INSTANTIATE_TEST_SUITE_P(ArbitraryChannels,
+                         WanBlockedNormSiluCausalInputDynamicShapeTest,
+                         testing::ValuesIn(arbitrary_channels_cases()));
+
 INSTANTIATE_TEST_SUITE_P(
     DynamicSpatialShape,
     WanBlockedNormSiluCausalInputDynamicShapeTest,
@@ -458,7 +490,15 @@ INSTANTIATE_TEST_SUITE_P(
                     WanBlockedNormSiluCausalInputTestParam{96, 4, 33, 33, 1},
                     WanBlockedNormSiluCausalInputTestParam{192, 4, 45, 46, 0},
                     WanBlockedNormSiluCausalInputTestParam{96, 17, 17, 19, 2},
-                    WanBlockedNormSiluCausalInputTestParam{192, 33, 9, 9, 1}));
+                    WanBlockedNormSiluCausalInputTestParam{192, 33, 9, 9, 1},
+                    WanBlockedNormSiluCausalInputTestParam{48, 4, 65, 65, 2},
+                    WanBlockedNormSiluCausalInputTestParam{64, 5, 129, 131, 1},
+                    WanBlockedNormSiluCausalInputTestParam{128, 4, 33, 35, 0},
+                    WanBlockedNormSiluCausalInputTestParam{160, 8, 17, 19, 2},
+                    WanBlockedNormSiluCausalInputTestParam{208, 4, 45, 46, 1},
+                    WanBlockedNormSiluCausalInputTestParam{256, 17, 9, 9, 0},
+                    WanBlockedNormSiluCausalInputTestParam{384, 4, 129, 131, 2},
+                    WanBlockedNormSiluCausalInputTestParam{640, 4, 65, 66, 1}));
 
 }  // namespace
 }  // namespace xllm::kernel::npu::tilelang
