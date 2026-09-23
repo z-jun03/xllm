@@ -26,17 +26,39 @@ limitations under the License.
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/framework/dit_model_loader.h"
 #include "core/framework/model/model_input_params.h"
 #include "core/framework/state_dict/state_dict.h"
+#if defined(USE_NPU)
+#include <acl/acl_base.h>
+#include <torch_npu/csrc/core/npu/NPUFormat.h>
+
+#include "core/kernels/npu/tilelang/tilelang_ops_api.h"
+#endif
+#include "core/util/env_var.h"
 #include "framework/model_context.h"
 #include "models/dit/autoencoders/autoencoder_kl.h"
 #include "models/dit/utils/dit_parallel_mixin.h"
 #include "models/model_registry.h"
 
 namespace xllm {
+
+constexpr int64_t kWanFeatureCacheTemporal = 2;
+
+inline bool wan_causal_cache_fusion_enabled() {
+  static const bool enabled =
+      util::get_bool_env("XLLM_WAN_CAUSAL_CACHE_FUSION", false);
+  return enabled;
+}
+
+inline bool wan_blocked_norm_silu_fusion_enabled() {
+  static const bool enabled =
+      util::get_bool_env("XLLM_WAN_BLOCKED_NORM_SILU_FUSION", false);
+  return enabled;
+}
 
 class AvgDown3DImpl : public torch::nn::Module {
  public:
@@ -200,10 +222,32 @@ class WanCausalConv3DImpl : public torch::nn::Module,
       input = vae_parallel_exchange(input, /*pad=*/true);
     }
 
-    input = torch::nn::functional::pad(
-        input, torch::nn::functional::PadFuncOptions(padding));
-
-    auto out = conv_->forward(input);
+    const bool has_cache = cache_x.has_value() && cache_x.value().defined();
+    const bool use_single_frame_conv2d = !has_cache && input.size(2) == 1 &&
+                                         stride_[0] == 1 &&
+                                         kernel_size_[0] == 2 * padding_[0] + 1;
+    torch::Tensor out;
+    if (use_single_frame_conv2d) {
+      torch::Tensor input_2d = input.squeeze(2);
+      torch::Tensor weight_2d = conv_->weight.select(2, kernel_size_[0] - 1);
+      out = torch::nn::functional::conv2d(
+                input_2d,
+                weight_2d,
+                torch::nn::functional::Conv2dFuncOptions()
+                    .bias(conv_->bias)
+                    .stride({stride_[1], stride_[2]})
+                    .padding({padding_[1], padding_[2]}))
+                .unsqueeze(2);
+    } else {
+      if (!wan_causal_cache_fusion_enabled() ||
+          std::any_of(padding.begin(), padding.end(), [](int64_t value) {
+            return value != 0;
+          })) {
+        input = torch::nn::functional::pad(
+            input, torch::nn::functional::PadFuncOptions(padding));
+      }
+      out = conv_->forward(input);
+    }
 
     // Trim halo columns after conv:
     //   exchange() added 1 column from left neighbor and 1 from right neighbor
@@ -215,6 +259,57 @@ class WanCausalConv3DImpl : public torch::nn::Module,
     }
     return out;
   }
+
+  std::pair<torch::Tensor, torch::Tensor> forward_with_cache(
+      const torch::Tensor& x,
+      const torch::Tensor& feature_cache) {
+#if defined(USE_NPU)
+    if (wan_causal_cache_fusion_enabled() &&
+        kernel::npu::tilelang::can_wan_causal_conv3d_input(x, feature_cache)) {
+      auto [input, next_cache] =
+          kernel::npu::tilelang::wan_causal_conv3d_input(x, feature_cache);
+      const bool use_halo =
+          vae_parallel_enabled() && padding_[1] == 1 && padding_[2] == 1;
+      if (use_halo) {
+        input = vae_parallel_exchange(input, /*pad=*/true);
+      }
+      torch::Tensor out = conv_->forward(input);
+      if (use_halo) {
+        out = out.slice(/*dim=*/-1, 1, out.size(-1) - 1);
+      }
+      return {out, next_cache};
+    }
+#endif
+
+    torch::Tensor next_cache =
+        x.index({torch::indexing::Slice(),
+                 torch::indexing::Slice(),
+                 torch::indexing::Slice(-kWanFeatureCacheTemporal,
+                                        torch::indexing::None),
+                 torch::indexing::Slice(),
+                 torch::indexing::Slice()})
+            .clone();
+    if (next_cache.size(2) < kWanFeatureCacheTemporal &&
+        feature_cache.defined() && feature_cache.numel() > 0) {
+      next_cache = torch::cat({feature_cache
+                                   .index({torch::indexing::Slice(),
+                                           torch::indexing::Slice(),
+                                           -1,
+                                           torch::indexing::Slice(),
+                                           torch::indexing::Slice()})
+                                   .unsqueeze(2)
+                                   .to(next_cache.device()),
+                               next_cache},
+                              2);
+    }
+    return {forward(x, feature_cache), next_cache};
+  }
+  torch::Tensor forward_prepared_input(const torch::Tensor& input) {
+    CHECK(!vae_parallel_enabled())
+        << "Blocked Wan Conv3D input does not support VAE parallel halo";
+    return conv_->forward(input);
+  }
+  bool can_forward_prepared_input() const { return !vae_parallel_enabled(); }
 
   void load_state_dict(const StateDict& state_dict) {
     weight::load_weight(state_dict, "weight", conv_->weight, is_weight_loaded_);
@@ -304,6 +399,8 @@ class WanRMSNormImpl : public torch::nn::Module {
       CHECK(is_bias_loaded_) << "bias is not loaded for " << prefix + "bias";
     }
   }
+
+  const torch::Tensor& gamma() const { return gamma_; }
 
  private:
   bool is_weight_loaded_{false};
@@ -578,7 +675,7 @@ class WanResidualBlockImpl : public torch::nn::Module {
                        int64_t in_dim,
                        int64_t out_dim,
                        float dropout = 0.0f)
-      : in_dim_(in_dim), out_dim_(out_dim) {
+      : in_dim_(in_dim), out_dim_(out_dim), dropout_(dropout) {
     nonlinearity_ = torch::nn::Functional(torch::silu);
     norm1_ = register_module("norm1", WanRMSNorm(in_dim, true, false, false));
     conv1_ = register_module("conv1",
@@ -626,31 +723,40 @@ class WanResidualBlockImpl : public torch::nn::Module {
 
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      auto cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-      if (cache_x.size(2) < 2 && (*feat_cache)[idx].numel() > 0) {
-        cache_x = torch::cat({(*feat_cache)[idx]
-                                  .index({torch::indexing::Slice(),
-                                          torch::indexing::Slice(),
-                                          -1,
-                                          torch::indexing::Slice(),
-                                          torch::indexing::Slice()})
-                                  .unsqueeze(2)
-                                  .to(cache_x.device()),
-                              cache_x},
-                             2);
-      }
-      x = conv1_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv1_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv1_->forward(x);
     }
+
+#if defined(USE_NPU)
+    if (feat_cache && dropout_ == 0.0f &&
+        conv2_->can_forward_prepared_input() &&
+        wan_blocked_norm_silu_fusion_enabled()) {
+      const int64_t idx = (*feat_idx)[0];
+      torch::Tensor& feature_cache = (*feat_cache)[idx];
+      if (kernel::npu::tilelang::can_wan_blocked_norm_silu_causal_input(
+              x, norm2_->gamma(), feature_cache)) {
+        auto [conv_input, next_cache] =
+            kernel::npu::tilelang::wan_blocked_norm_silu_causal_input(
+                x, norm2_->gamma(), feature_cache);
+        x = conv2_->forward_prepared_input(conv_input);
+        feature_cache = next_cache;
+        (*feat_idx)[0] += 1;
+        return x + h;
+      }
+      if (feature_cache.defined() && feature_cache.numel() > 0 &&
+          at_npu::native::get_npu_format(feature_cache) ==
+              ACL_FORMAT_NDC1HWC0) {
+        feature_cache = at_npu::native::npu_format_cast(
+                            feature_cache, ACL_FORMAT_NCDHW)
+                            .contiguous();
+      }
+    }
+#endif
 
     x = norm2_->forward(x);
     x = nonlinearity_(x);
@@ -658,29 +764,10 @@ class WanResidualBlockImpl : public torch::nn::Module {
 
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      auto cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-
-      if (cache_x.size(2) < 2 && idx < feat_cache->size() &&
-          (*feat_cache)[idx].numel()) {
-        cache_x = torch::cat({(*feat_cache)[idx]
-                                  .index({torch::indexing::Slice(),
-                                          torch::indexing::Slice(),
-                                          -1,
-                                          torch::indexing::Slice(),
-                                          torch::indexing::Slice()})
-                                  .unsqueeze(2)
-                                  .to(cache_x.device()),
-                              cache_x},
-                             2);
-      }
-      x = conv2_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv2_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv2_->forward(x);
@@ -712,6 +799,7 @@ class WanResidualBlockImpl : public torch::nn::Module {
 
  private:
   int64_t in_dim_, out_dim_;
+  float dropout_;
   const int64_t CACHE_T = 2;
 
  public:
@@ -1075,27 +1163,10 @@ class WanVAEEncoder3DImpl : public torch::nn::Module {
     if (!feat_idx) feat_idx = std::make_shared<std::vector<int64_t>>(1, 0);
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      auto cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-      if (cache_x.size(2) < 2 && (*feat_cache)[idx].numel() > 0) {
-        cache_x = torch::cat({(*feat_cache)[idx]
-                                  .index({torch::indexing::Slice(),
-                                          torch::indexing::Slice(),
-                                          -1,
-                                          torch::indexing::Slice(),
-                                          torch::indexing::Slice()})
-                                  .unsqueeze(2)
-                                  .to(cache_x.device()),
-                              cache_x},
-                             2);
-      }
-      x = conv_in_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv_in_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv_in_->forward(x);
@@ -1121,27 +1192,10 @@ class WanVAEEncoder3DImpl : public torch::nn::Module {
     x = nonlinearity_(x);
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      auto cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-      if (cache_x.size(2) < 2 && (*feat_cache)[idx].numel() > 0) {
-        cache_x = torch::cat({(*feat_cache)[idx]
-                                  .index({torch::indexing::Slice(),
-                                          torch::indexing::Slice(),
-                                          -1,
-                                          torch::indexing::Slice(),
-                                          torch::indexing::Slice()})
-                                  .unsqueeze(2)
-                                  .to(cache_x.device()),
-                              cache_x},
-                             2);
-      }
-      x = conv_out_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv_out_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv_out_->forward(x);
@@ -1469,27 +1523,10 @@ class WanVAEDecoder3DImpl : public torch::nn::Module {
     // conv_in
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      torch::Tensor cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-      if (cache_x.size(2) < 2 && (*feat_cache)[idx].defined()) {
-        cache_x = torch::cat({(*feat_cache)[idx]
-                                  .index({torch::indexing::Slice(),
-                                          torch::indexing::Slice(),
-                                          -1,
-                                          torch::indexing::Slice(),
-                                          torch::indexing::Slice()})
-                                  .unsqueeze(2)
-                                  .to(cache_x.device()),
-                              cache_x},
-                             2);
-      }
-      x = conv_in_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv_in_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv_in_->forward(x);
@@ -1513,28 +1550,10 @@ class WanVAEDecoder3DImpl : public torch::nn::Module {
     // conv_out
     if (feat_cache) {
       int64_t idx = (*feat_idx)[0];
-      torch::Tensor cache_x =
-          x.index({torch::indexing::Slice(),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice(-CACHE_T, torch::indexing::None),
-                   torch::indexing::Slice(),
-                   torch::indexing::Slice()})
-              .clone();
-      if (cache_x.size(2) < 2 && (*feat_cache)[idx].defined()) {
-        cache_x = torch::cat(
-            {(*feat_cache)[idx]
-                 .index({torch::indexing::Slice(),
-                         torch::indexing::Slice(),
-                         torch::indexing::Slice(-1, torch::indexing::None),
-                         torch::indexing::Slice(),
-                         torch::indexing::Slice()})
-                 .unsqueeze(2)
-                 .to(cache_x.device()),
-             cache_x},
-            2);
-      }
-      x = conv_out_->forward(x, (*feat_cache)[idx]);
-      (*feat_cache)[idx] = cache_x;
+      auto [conv_output, next_cache] =
+          conv_out_->forward_with_cache(x, (*feat_cache)[idx]);
+      x = conv_output;
+      (*feat_cache)[idx] = next_cache;
       (*feat_idx)[0] += 1;
     } else {
       x = conv_out_->forward(x);
@@ -1714,8 +1733,17 @@ class AutoencoderKLWanImpl : public torch::nn::Module,
     int64_t num_frame = processed_latents.size(2);
     int64_t height = processed_latents.size(3);
     int64_t width = processed_latents.size(4);
-    clear_cache();
     processed_latents = post_quant_conv_->forward(processed_latents);
+    if (num_frame == 1) {
+      torch::Tensor out = decoder_(processed_latents,
+                                   /*feat_cache=*/nullptr,
+                                   /*feat_idx=*/nullptr,
+                                   /*first_chunk=*/true);
+      out = vae_parallel_merge(out);
+      return DecoderOutput(torch::clamp(out, -1.0f, 1.0f));
+    }
+
+    clear_cache();
     std::vector<torch::Tensor> dec_outputs;
     dec_outputs.reserve(num_frame);
     for (int64_t i = 0; i < num_frame; ++i) {
